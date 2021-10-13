@@ -1,5 +1,5 @@
-/*
- * STL当中的<stl_function.h>, <stl_hash_fun.h>, <stl_algo.h>, <stl_pair.h>部分内容的简化版
+/* utils.hpp
+ * STL当中<stl_function.h> <stl_hash_fun.h> <stl_algo.h> <stl_pair.h>部分内容的简化版
  */
 #ifndef __UTILITIES__
 #define __UTILITIES__
@@ -36,6 +36,15 @@ struct Pair {
     Pair(): first(T1()), second(T2()) {}
     Pair(const T1& _first, const T2& _second):
         first(_first), second(_second) {}
+    // bool operator>(const Pair<T1, T2>& other) {
+    //     if (first > other.first) return true;
+    //     else if (first < other.first) return false;
+    //     else {
+    //         if (second > other.second) return true;
+    //         else if (second < other.second) return false;
+    //         else return (this > &other);
+    //     }
+    // }
 };
 template <class T1, class T2>
 ostream& operator<<(ostream& out, const Pair<T1, T2>& pr_obj) 

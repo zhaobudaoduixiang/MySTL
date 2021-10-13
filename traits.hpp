@@ -1,5 +1,6 @@
-/*
- * SGI STL当中的<type_traits.h>部分内容的简化版，主要包括iterator_traits<>和__type_traits<> 
+/* traits.hpp
+ * SGI STL当中<type_traits.h>部分内容的简化版
+ * 主要包括iterator_traits<>和__type_traits<> 
  */
 #ifndef __TRAITS__
 #define __TRAITS__
@@ -19,14 +20,14 @@ template <class Category,
           class Pointer,
           class Reference,
           class Distance>
-struct Iterator {           // iterator<...>
+struct Iterator {  // iterator<...>
     typedef Category    iterator_category;
     typedef Type        value_type;
     typedef Pointer     pointer;
     typedef Reference   reference;
     typedef Distance    difference_type;
 };
-// 一般迭代器类型（为什么要搁这搁这？因为要考虑到天然的指针也可以是迭代器呀...）
+// 一般迭代器类型【为什么要搁这搁这？因为要考虑到天然的指针也可以是迭代器呀！】
 template <class Ite>
 struct IteratorTraits {     // iterator_traits<>
     typedef typename Ite::iterator_category iterator_category;
@@ -76,7 +77,7 @@ template<> struct TypeTraits<char> {
     typedef TpTrue has_trivail_destructor;
     typedef TpTrue is_POD_type;
 };
-template<> struct TypeTraits<signed char> {         // signed/unsigned char表示单个字节的整型，而不是字符
+template<> struct TypeTraits<signed char> {  // signed/unsigned char表示单个字节的整型，而不是字符
     typedef TpTrue has_trivial_default_constructor;
     typedef TpTrue has_trivial_copy_constructor;
     typedef TpTrue has_trivial_assignment_operator;
@@ -84,6 +85,20 @@ template<> struct TypeTraits<signed char> {         // signed/unsigned char表�
     typedef TpTrue is_POD_type;
 };
 template<> struct TypeTraits<unsigned char> {
+    typedef TpTrue has_trivial_default_constructor;
+    typedef TpTrue has_trivial_copy_constructor;
+    typedef TpTrue has_trivial_assignment_operator;
+    typedef TpTrue has_trivail_destructor;
+    typedef TpTrue is_POD_type;
+};
+template<> struct TypeTraits<short> {
+    typedef TpTrue has_trivial_default_constructor;
+    typedef TpTrue has_trivial_copy_constructor;
+    typedef TpTrue has_trivial_assignment_operator;
+    typedef TpTrue has_trivail_destructor;
+    typedef TpTrue is_POD_type;
+};
+template<> struct TypeTraits<unsigned short> {
     typedef TpTrue has_trivial_default_constructor;
     typedef TpTrue has_trivial_copy_constructor;
     typedef TpTrue has_trivial_assignment_operator;
@@ -104,10 +119,54 @@ template<> struct TypeTraits<unsigned int> {
     typedef TpTrue has_trivail_destructor;
     typedef TpTrue is_POD_type;
 };
-// 还有 short, unsigned short, 
-//      long, unsigned long, 
-//      long long? unsigned long long?
-//      float, double, long double
-
+template<> struct TypeTraits<long> {
+    typedef TpTrue has_trivial_default_constructor;
+    typedef TpTrue has_trivial_copy_constructor;
+    typedef TpTrue has_trivial_assignment_operator;
+    typedef TpTrue has_trivail_destructor;
+    typedef TpTrue is_POD_type;
+};
+template<> struct TypeTraits<unsigned long> {
+    typedef TpTrue has_trivial_default_constructor;
+    typedef TpTrue has_trivial_copy_constructor;
+    typedef TpTrue has_trivial_assignment_operator;
+    typedef TpTrue has_trivail_destructor;
+    typedef TpTrue is_POD_type;
+};
+template<> struct TypeTraits<long long> {
+    typedef TpTrue has_trivial_default_constructor;
+    typedef TpTrue has_trivial_copy_constructor;
+    typedef TpTrue has_trivial_assignment_operator;
+    typedef TpTrue has_trivail_destructor;
+    typedef TpTrue is_POD_type;
+};
+template<> struct TypeTraits<unsigned long long> {
+    typedef TpTrue has_trivial_default_constructor;
+    typedef TpTrue has_trivial_copy_constructor;
+    typedef TpTrue has_trivial_assignment_operator;
+    typedef TpTrue has_trivail_destructor;
+    typedef TpTrue is_POD_type;
+};
+template<> struct TypeTraits<float> {
+    typedef TpTrue has_trivial_default_constructor;
+    typedef TpTrue has_trivial_copy_constructor;
+    typedef TpTrue has_trivial_assignment_operator;
+    typedef TpTrue has_trivail_destructor;
+    typedef TpTrue is_POD_type;
+};
+template<> struct TypeTraits<double> {
+    typedef TpTrue has_trivial_default_constructor;
+    typedef TpTrue has_trivial_copy_constructor;
+    typedef TpTrue has_trivial_assignment_operator;
+    typedef TpTrue has_trivail_destructor;
+    typedef TpTrue is_POD_type;
+};
+template<> struct TypeTraits<long double> {
+    typedef TpTrue has_trivial_default_constructor;
+    typedef TpTrue has_trivial_copy_constructor;
+    typedef TpTrue has_trivial_assignment_operator;
+    typedef TpTrue has_trivail_destructor;
+    typedef TpTrue is_POD_type;
+};
 
 #endif // __TRAITS__

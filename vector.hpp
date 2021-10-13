@@ -1,14 +1,31 @@
-/* 以下相当于SGI STL当中的<stl_vector.h>/<vector>部分内容的简化版，也做了少许优化
- * Vector<> 与 SGI STL vector<> 不同的是：
+/* vector.hpp
+ * 动态数组
+ * STL当中 <stl_vector.h>/<vector> 部分内容的简化/优化版
+ * Vector<> 与 STL vector<> 不同之处：
  * insert()/erase()中的元素移动、_resize()扩容/缩容，都是通过内存拷贝(memmove/memcpy)实现
  * 即使Type类型对象带指向其它空间的指针，这样做也是完全没问题的！！！无需频繁地进行构造/解构对象！
  */
+/* 关于深/浅拷贝：
+ * 如果参数是右值引用，绝对要深拷贝 —— 右值引用是临时对象，若只复制指针，操作完后临时对象析构，这个刚构建的对象也没了
+ * 如果参数是常引用，也要深拷贝！不然对象析构的时候会free()同一个指针多次造成程序崩溃！
+ * 综上，总之深拷贝就对了！
+ * (1)像如下情况，编译器 不会 进行多余的深拷贝：
+ * template<class Type>
+ * Vector<Type>& generate_Vector() { Vector<Type> tmp; ...; return tmp; }
+ * Vector<xx> vec = generate_Vector<xx>()
+ * 将tmp构造好后，就直接将三个指针塞到vec了，而不会进行深拷贝构造！
+ * (2)像如下情况，则会提示无法操作：
+ * Vector<xx> vec;
+ * vec = generate_Vector();
+ * 此时generate_Vector()产生的是临时的右值引用，只能重载operater=(&&)进行深拷贝！
+ */
+
 #ifndef __VECTOR__
 #define __VECTOR__
-#include <iostream>         // cout, cerr, <ostream>/ostream... 以及<new>/new, <cstring>/memmove, <cstdlib>/malloc, <windows.h>/system等
+#include <iostream>         // cout, cerr, ostream... 以及 <new>/new, <cstring>/memmove, <cstdlib>/malloc, <windows.h>/system 等
 #include <initializer_list> // initializer_list<>
 #include "alloc.hpp"        // FirstAlloc<>
-#include "traits.hpp"       // IterTraits<Type*>::, TypeTraits<>::
+#include "traits.hpp"       // TypeTraits<>
 using namespace std;
 
 
@@ -16,7 +33,7 @@ using namespace std;
 template < class Type, class Alloc = FirstAlloc<Type> >
 class Vector {
 public:     // 【迭代器等内部类型定义】
-    static const size_t default_capacity = 31;  // 默认初始大小(不是！)
+    static const size_t default_capacity = 31ULL;   // 默认初始大小(已经演变成缩容的“下界”了。。。)
     typedef Type        value_type;         // 
     typedef Type*       iterator;           // 迭代器(Type*)
     typedef Type&       reference;          // 
@@ -33,10 +50,10 @@ protected:  // 【成员变量】
     Type* _finish;              // 已初始地址的最后一个+1
     Type* _end_of_storage;      // 可用地址的最后一个+1
 
-    // 【扩/缩容】
+            // 【扩/缩容】
     void _resize(size_t n) {
-        // 【其实并不需要像STL vector那样进行：再分配->深拷贝...】
-        // 【直接用realloc调整空间或浅拷贝即可，即使Type类对象另带指针也没问题的！】
+        // 其实并不需要像STL vector那样进行：再分配->深拷贝...
+        // 直接用realloc调整空间或浅拷贝即可，即使Type类对象另带指针也没问题的！
         Type* new_start = Alloc::reallocate(_start, n);
         _end_of_storage = new_start + n;
         _finish = new_start + size();  // 不加if(new_start != _start)，尽量不破坏流水线
@@ -51,7 +68,7 @@ public:     // 【构造、析构函数】
     // 构造 [ value, value, value..., (n个元素) ] 这样的一个数组对象
     // 若n=0则延迟构造(_start, ... = nullptr)，value默认为Type()
     Vector(size_t n, const Type& value = Type()): 
-    _start(nullptr), _finish(nullptr), _end_of_storage(nullptr) {
+        _start(nullptr), _finish(nullptr), _end_of_storage(nullptr) {
         // 【注：STL vector带explicit，防止隐式转换。这里没有int/long n类型的重载，不要explicit】
         if (n != 0) {
             _start = Alloc::allocate(n);
@@ -65,7 +82,7 @@ public:     // 【构造、析构函数】
     // 以[first, last)指针区域的内容构造一个数组对象
     // 若first>=last则延迟构造(_start, ... = nullptr)
     Vector(iterator first, iterator last): 
-    _start(nullptr), _finish(nullptr), _end_of_storage(nullptr) {
+        _start(nullptr), _finish(nullptr), _end_of_storage(nullptr) {
         if (first < last) {
             size_t n = size_t(last - first);
             _start = Alloc::allocate(n);
@@ -90,22 +107,9 @@ public:     // 【构造、析构函数】
         mystl_destroy(_start, _finish);     // 依次析构
         Alloc::deallocate(_start);          // 释放空间
     }
-    // * 关于深/浅拷贝：
-    // * 如果参数是右值引用，绝对要深拷贝 —— 右值引用是临时对象，若只复制指针，操作完后临时对象析构，这个刚构建的对象也没了
-    // * 如果参数是常引用，也要深拷贝！不然对象析构的时候会free()同一个指针多次造成程序崩溃！
-    // * 综上，总之深拷贝就对了！
-    // (1)像如下情况，编译器不会进行多余的深拷贝：
-    // * template<class Type>
-    // * Vector<Type>& generate_Vector() { Vector<Type> tmp; ...; return tmp; }
-    // * Vector<xx> arr = generate_Vector<xx>()
-    // * 将tmp构造好后，就直接将三个指针塞到arr了，而不会进行深拷贝构造！
-    // (2)像如下情况，则会提示无法操作：
-    // * Vector<xx> arr;
-    // * arr = generate_Vector();
-    // * 此时generate_Vector()产生的是临时的右值引用，只能重载operater=(&&)进行深拷贝！
-    // 深拷贝
+    // 拷贝构造函数，默认深拷贝
     Vector(const Vector<Type>& other, bool deepcopy=true):
-    _start(other._start), _finish(other._finish), _end_of_storage(other._end_of_storage) {
+        _start(other._start), _finish(other._finish), _end_of_storage(other._end_of_storage) {
         if (deepcopy) {
             _start = Alloc::allocate(other.size());
             _end_of_storage = _start + other.size();
@@ -127,7 +131,7 @@ public:     // 【构造、析构函数】
         return *this;
     }
 
-public:     // 【改、查】！！！类定义中的函数自动内联（不超过一行）！！！
+public:     // 【改、查】类定义中不超一行自动内联
     // 已有的元素个数
     size_t size() const { return size_t(_finish - _start); }
     // 总共可容纳的元素个数
@@ -180,7 +184,7 @@ public:     // 【删】
     // 弹出末端元素
     Type pop_back() {
         if (_finish <= _start) {        // 数组为空情况
-            cerr << "warning: " << "Vector(at " << _start << ") is empty!" << endl;
+            cerr << "warning: " << "Vector(at " << this << ") is empty!" << endl;
             return Type();
         }
         Type tmp(*(_finish-1));         // 暂存back()用于返回
@@ -192,7 +196,7 @@ public:     // 【删】
     // 将指针区域[first, last)元素全部删除
     void erase(iterator first, iterator last) {
         if (_finish <= _start) {                        // 数组为空情况
-            cerr << "warning: " << "Vector(at " << _start << ") is empty!" << endl;
+            cerr << "warning: " << "Vector(at " << this << ") is empty!" << endl;
             return;
         }
         if (last < first  ||  last > _finish  ||        // first/last越界
@@ -213,9 +217,12 @@ public:     // 【删】
 public:     // 【特殊：交换两个Vector<Type>，浅拷贝交换！】
     void swap(Vector<Type>& other) {
         if (&other == this) return;
-        Type* tmp_start=_start;     Type* tmp_finish=_finish;   Type* tmp_end=_end_of_storage;
-        _start=other._start;        _finish=other._finish;      _end_of_storage=other._end_of_storage;
-        other._start=tmp_start;     other._finish=tmp_finish;   other._end_of_storage=tmp_end;
+        Vector<Type> tmp[1]; memcpy(tmp, this, sizeof(Vector<Type>));
+        memcpy(this, &other, sizeof(Vector<Type>));
+        memcpy(&other, tmp, sizeof(Vector<Type>));
+        // Type* tmp_start=_start;     Type* tmp_finish=_finish;   Type* tmp_end=_end_of_storage;
+        // _start=other._start;        _finish=other._finish;      _end_of_storage=other._end_of_storage;
+        // other._start=tmp_start;     other._finish=tmp_finish;   other._end_of_storage=tmp_end;
     }
 };
 

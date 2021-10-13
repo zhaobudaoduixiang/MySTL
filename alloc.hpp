@@ -1,28 +1,34 @@
-/*
- * STL当中的<stl_construct.h>和<stl_alloc.h>部分内容的简化版
+/* alloc.hpp
+ * STL当中 <stl_construct.h> <stl_alloc.h> 部分内容的简化版
  */
 #ifndef __ALLOCATOR__
 #define __ALLOCATOR__
-// #include <new>      // ::operator new
-#include <cstdlib>  // calloc, realloc, free
-#include <cerrno>   // perror(即"print error")
-#include "traits.hpp"
+#include <cstdlib>      // malloc, realloc, free
+#include <cerrno>       // perror(print error)
+#include "traits.hpp"   // TypeTraits<>, IteratorTraits<>
 using namespace std;
 
 
-// """在[first, last)区域内以value值构造对象[STL uninitialized_fill()]"""【似乎没什么必要？！】
-// template<class ForwardIterator, class Type>
-// inline void __mystl_construct(ForwardIterator first, 
-//                               ForwardIterator last, 
-//                               const Type& value, TpFalse) {}    // 一般非POD类型，for... new (ptr) Type(value)
-// template<class ForwardIterator, class Type>
-// inline void __mystl_construct(ForwardIterator first, 
-//                               ForwardIterator last, 
-//                               const Type& value, TpTrue) {}     // POD类型，for... * = value
-// template <class ForwardIterator, class Type>
-// inline void mystl_construct(ForwardIterator first, 
-//                             ForwardIterator last, 
-//                             const Type& value) {}
+// """在[first, last)区域内以value值构造对象[STL uninitialized_fill()]"""
+// 似乎真没什么必要... uninitialized_fill_n()的源码在《STL源码剖析》的3.7
+template<class ForwardIterator, class Type>
+inline void __mystl_construct(ForwardIterator first, 
+                              ForwardIterator last, 
+                              const Type& value, TpFalse)   // 一般非POD类型
+    { for(; first!=last; ++first) new (first) Type(value); }
+template<class ForwardIterator, class Type>
+inline void __mystl_construct(ForwardIterator first, 
+                              ForwardIterator last, 
+                              const Type& value, TpTrue)    // POD类型
+    { for(; first!=last; ++first) *first=value; }
+template <class ForwardIterator, class Type>
+inline void mystl_construct(ForwardIterator first, 
+                            ForwardIterator last, 
+                            const Type& value)
+    { __mystl_construct(first, last, value, 
+                        typename TypeTraits<typename IteratorTraits<ForwardIterator>::value_type>
+                        ::is_POD_type()); }
+
 // """解构[first, last)区域的全部对象[STL destroy()]"""
 template <class ForwardIterator, class Type>
 inline void __mystl_destroy(ForwardIterator first, 
@@ -40,8 +46,7 @@ inline void mystl_destroy(ForwardIterator first,
         ::has_trivail_destructor()
     );
 }
-/* 注意：
- * SGI STL中惯用的inline void construct(T1*, const T2&)只是单纯的placement new，这里不进行包装
+/* SGI STL中惯用的inline void construct(T1*, const T2&)只是单纯的placement new，这里不进行包装
  * 单个的inline void destroy(T*)也只是单纯地调用析构函数，这里也不进行包装
  */
 
@@ -56,7 +61,7 @@ struct FirstAlloc {
         return mem;
     }
     // 只是free(mem)
-    static void deallocate(Type* mem, size_t nobj = 0) { free(mem); }
+    static void deallocate(Type* mem, size_t nobj = 1) { free(mem); }
     // 基于mem，重新分配nobj个Type类对象的空间(realloc)
     static Type* reallocate(Type* mem, size_t nobj) {               // 【_msize(ptr)运算符可知分配了多少内存给ptr】
         Type* new_mem = (Type*)realloc(mem, nobj*sizeof(Type));     // 【realloc自带拷贝和free！】
@@ -78,7 +83,7 @@ struct FirstAlloc {
 #define __N_BLOCK_PER_LIST  20      // 每次_mlist_alloc()获得的内存链表默认为20个对应大小的小区块
 // 内存池【STL中的“二级内存分配器模板(__default_alloc_template)”】
 template <bool threads = false>
-struct __MemoryPool {
+struct __MemoryPool {           // 是否为多线程，默认为否
 private:
     union mem_block {
         union mem_block* next_block;
@@ -183,19 +188,19 @@ public:
     }
 
 // 二级内存分配器接口SecAlloc【只满足::allocate, ::reallocate】
-template <class Type, bool threads = false>
+template <class Type>
 struct SecAlloc {
     // 分配nobj个【默认nobj=1】Type类对象的空间
     static Type* allocate() 
-        { return (Type*)__MemoryPool<threads>::allocate(sizeof(Type)); }
-    static Type* allocate(size_t nobj) 
-        { return (Type*)__MemoryPool<threads>::allocate(nobj*sizeof(Type)); }
+        { return (Type*)__MemoryPool<>::allocate(sizeof(Type)); }
     // 释放mem的空间，其大小为nobj个【默认nobj=1】Type类对象的大小
     static void deallocate(Type* mem) 
-        { __MemoryPool<threads>::deallocate(mem, sizeof(Type)); }
-    static void deallocate(Type* mem, size_t nobj) 
-        { __MemoryPool<threads>::deallocate(mem, nobj*sizeof(Type)); }
-    // ??????????????基于mem，重新分配nobj个Type类对象的空间
+        { __MemoryPool<>::deallocate(mem, sizeof(Type)); }
+    // static Type* allocate(size_t nobj) 
+    //     { return (Type*)__MemoryPool<>::allocate(nobj*sizeof(Type)); }
+    // static void deallocate(Type* mem, size_t nobj) 
+    //     { __MemoryPool<>::deallocate(mem, nobj*sizeof(Type)); }
+    // 基于mem，重新分配nobj个Type类对象的空间【二级内存分配器似乎无法实现reallocate...】
     // static Type* reallocate(Type* mem, size_t nobj) {}
 };
 /* 注意：
