@@ -164,7 +164,7 @@ _mem_lists[__n_mem_lists] = {nullptr,0,0,0,  0,0,0,0,  0,0,0,0,  0,0,0,0};
 // 从内存池中分配nblocks个block_size字节的内存块所需的总内存
 template <bool threads>
 char* __MemoryPool<threads>::_chunk_alloc(size_t block_size, size_t& nblocks) {
-    char* chunk;
+    char* chunk;    // 返回的空间起始地址
     size_t alloc_bytes = block_size * nblocks;
     size_t pool_bytes = _end_free - _start_free;
     if (pool_bytes >= alloc_bytes) {        // 内存池剩余空间完全满足需求
