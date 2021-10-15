@@ -149,8 +149,8 @@ public:
     }
 };
 
-// __MemoryPool静态成员变量初始化
-// __MemoryPool不能设置为<class Type>这样的模板类，否则内存池就没意义了！
+// __MemoryPool静态成员变量的初始化
+// 正是因为这些静态成员，即要求不同类型的空间在同一个内存池分配，所以不能设置为<class Type>这样的模板类！
 template <bool threads>
 char* __MemoryPool<threads>::_start_free = nullptr;
 template <bool threads>
