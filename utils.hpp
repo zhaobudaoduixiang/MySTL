@@ -1,4 +1,5 @@
 /* utils.hpp
+ * 【各种小工具函数/类】
  * STL当中<stl_function.h> <stl_hash_fun.h> <stl_algo.h> <stl_pair.h>部分内容的简化版
  */
 #ifndef __UTILITIES__

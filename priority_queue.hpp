@@ -1,10 +1,12 @@
 /* priority_queue.hpp
- * 优先队列
+ * 【优先队列】允许以O(logn)时间增/删“优先级最高元素”
  * STL当中 <stl_queue.h>/<queue> 的 priority_queue<> 部分内容的简化/优化版
+ * 
  * PriorityQueue<> 与 STL priority_queue<> 的不同之处：
  * 内部元素移动全部通过memcpy实现，而不是原本低效的深拷贝！
  * 这样当 Type 为 String / string 等带指针的序列类型，也能确保高效效率！
  */
+
 /* 基于“最大二叉堆”实现的优先队列示意图
  * 【PriorityCompare = Less<Type>就变成最小堆了，可自定指定优先级比较函数子】
  * ////////////////////////////////////
@@ -23,6 +25,7 @@
  * (4)left_child_index(i) = 2 * i + 1
  * (5)right_child_index(i) = 2 * i + 2
  */
+
 #ifndef __PRIORITY_QUEUE__
 #define __PRIORITY_QUEUE__
 #include <initializer_list>
@@ -36,6 +39,7 @@ using namespace std;
 // """优先队列PriorityQueue [STL priority_queue<>] """
 template < class Type, class PriorityCompare = Greater<Type>, class Alloc = FirstAlloc<Type> >
 class PriorityQueue {
+
 public:     // 【“优先队列”没有迭代器！！！】
     static const size_t default_capacity = 31ULL;   // 默认初始大小(已经演变成缩容的“下界”了。。。)
 
@@ -65,7 +69,7 @@ public:     // 【构造/析构函数】
         _end_of_storage = _start + init_size;
         for (const auto& item : init_list)
             new (_finish++) Type(item);
-        // heapify【从最后一个节点的父节点开始，依次往前shift down】
+        // heapify【从最后一个节点的父节点开始往前，就都可以看作一个子堆了，依次shift down】
         for (size_t index=((_finish-1-_start)-1)/2 ; index>0; --index)
             _shift_down(index);
     }
@@ -122,9 +126,9 @@ public:     // 【删】
         if (size() < capacity()/4  &&  capacity()/2 > default_capacity) {
             _resize(capacity() / 2);  // 延迟缩容，即：上一次_pop()操作后，即使容量冗余，也不会立即缩容
         }
-        Type tmp(*_start);
+        Type tmp(*_start);                          // 暂存堆顶元素，用于返回
         _start->~Type();
-        memcpy(_start, --_finish, sizeof(Type));
+        memcpy(_start, --_finish, sizeof(Type));    // 将末端元素 覆盖到 堆顶
         _shift_down(0);
         return tmp;
     }

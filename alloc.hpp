@@ -1,4 +1,5 @@
 /* alloc.hpp
+ * 【内存分配器】
  * STL当中 <stl_construct.h> <stl_alloc.h> 部分内容的简化版
  */
 #ifndef __ALLOCATOR__
@@ -77,35 +78,38 @@ struct FirstAlloc {
 
 
 // """二级内存分配器SecAlloc——内存池分配器【只满足::allocate, ::reallocate】"""
-#define __ALIGN             8       // 分配内存8字节对齐，STL中为enum {__ALIGN = 8};
-#define __MAX_BYTES         128     // 大于128字节则调用FirstAlloc，STL中为enum {__MAX_BYTES = 128};
-#define __N_MEM_LIST        16      // 128 ÷ 8 = 16，STL中为enum {__NFREELISTS = __MAX_BYTES / __ALIGN};
-#define __N_BLOCK_PER_LIST  20      // 每次_mlist_alloc()获得的内存链表默认为20个对应大小的小区块
 // 内存池【STL中的“二级内存分配器模板(__default_alloc_template)”】
-template <bool threads = false>
-struct __MemoryPool {           // 是否为多线程，默认为否
-private:
+template <bool threads = false>     // 是否为多线程，默认为否
+class __MemoryPool {
+    // 一些常量
+    static const size_t __align             = 8;    // 分配的内存大小为“8字节对齐”
+    static const size_t __max_bytes         = 128;  // 二级分配器最多分配128字节，否则将自动调用malloc()/free()
+    static const size_t __n_mem_lists       = 16;   // 128 / 8 = 16，16条内存链表
+    static const size_t __n_blocks_per_list = 20;   // 内存链表每次填充20个内存块
+
+    // 内存块：平时存着下一块内存块的地址，用时可覆盖
     union mem_block {
         union mem_block* next_block;
         char any_data[1];
     };
+
     static char* _start_free;   // 内存池起始位置，只在_chunk_alloc()中变化
     static char* _end_free;     // 内存池结束位置，只在_chunk_alloc()中变化
     static size_t _heap_size;   // ...
-    static mem_block* volatile _mem_lists[__N_MEM_LIST];    // 16条内存链表
+    static mem_block* volatile _mem_lists[__n_mem_lists];  // 16条内存链表
     
     // 将nbytes上调至8的倍数：+7然后砍掉二进制的后3位（变成8的倍数）
     static size_t _block_size(size_t nbytes)
-        { return ( (nbytes + __ALIGN-1) & ~(__ALIGN-1) ); }
-    // nbytes的小区块在_mem_lists中位置 = ⌈nbytes / 8⌉-1
+        { return ( (nbytes + __align-1) & ~(__align-1) ); }
+    // nbytes的区块在_mem_lists中位置 = ⌈nbytes / 8⌉-1
     static size_t _list_index(size_t nbytes)
-        { return ( (nbytes + __ALIGN-1) / __ALIGN - 1 ); }
+        { return ( (nbytes + __align-1) / __align - 1 ); }
 
-    // 从内存池中分配内存，然后切分/串联为__N_BLOCK_PER_LIST(20)个block_size字节的小内存块（内存链表）
+    // 从内存池中分配内存，然后切分/串联为__n_blocks_per_list(20)个block_size字节的小内存块（内存链表）
     static mem_block* _mlist_alloc(size_t block_size) {
-        size_t nblocks = __N_BLOCK_PER_LIST;
+        size_t nblocks = __n_blocks_per_list;
         char* chunk = _chunk_alloc(block_size, nblocks);    // nblocks存_chunk_alloc()分配得到区块个数，传引用！
-        char* next_block = chunk + block_size;              // nblocks有可能不足__N_BLOCK_PER_LIST(20)个！
+        char* next_block = chunk + block_size;              // nblocks有可能不足__n_blocks_per_list(20)个！
         mem_block* cur_block = (mem_block*)chunk;
         for (size_t i=0; i<nblocks-1; ++i) {        // 将新分配的内存切分/串联到各个mem_block
             cur_block->next_block = (mem_block*)next_block;
@@ -121,71 +125,73 @@ private:
 public:
     // 分配nbytes个字节的空间
     static void* allocate(size_t nbytes) {
-        if (nbytes > __MAX_BYTES)                   // 大于128字节，使用malloc分配
+        if (nbytes > __max_bytes)                   // 大于128字节，使用malloc分配
             return malloc(nbytes);
-        size_t i = _list_index(nbytes);             // 定位到对应内存链表，拨出小内存块
+        size_t i = _list_index(nbytes);             // 定位到对应内存链表，然后拨出内存块
         mem_block* cur_block = 
-            _mem_lists[i]? _mem_lists[i]: _mlist_alloc(__ALIGN*(i+1));
+            _mem_lists[i]? _mem_lists[i]: _mlist_alloc(__align*(i+1));
         _mem_lists[i] = cur_block->next_block;
         // SGI STL写法：mem_block* volatile *mem_list_ptr = _mem_lists + _list_index(block_size);
         return (cur_block);
     }
     // 释放mem所指空间，其大小为nbytes个字节
     static void deallocate(void* mem, size_t nbytes) {
-        if (nbytes > __MAX_BYTES)                   // 大于128字节，使用free释放
+        if (nbytes > __max_bytes)                   // 大于128字节，使用free释放
             return free(mem);
         size_t i = _list_index(nbytes);
-        mem_block* next_block = _mem_lists[i];      // 即对应内存链表.push_front(mem)
+        mem_block* next_block = _mem_lists[i];      // 以下即对应内存链表.push_front(mem)
         mem_block* cur_block = (mem_block*)mem;
         cur_block->next_block = next_block;
         _mem_lists[i] = cur_block;
     }
 };
-    // __MemoryPool静态成员变量初始化
-    // __MemoryPool不能设置为<class Type>这样的模板类，否则内存池就没意义了！！！
-    template <bool threads>
-    char* __MemoryPool<threads>::_start_free = nullptr;
-    template <bool threads>
-    char* __MemoryPool<threads>::_end_free = nullptr;
-    template <bool threads>
-    size_t __MemoryPool<threads>::_heap_size = 0;
-    template <bool threads>
-    typename __MemoryPool<threads>::mem_block* volatile __MemoryPool<threads>::
-    _mem_lists[__N_MEM_LIST] = {nullptr,0,0,0,  0,0,0,0,  0,0,0,0,  0,0,0,0};
-    // 从内存池中分配nblocks个block_size字节的内存块所需的总内存
-    template <bool threads>
-    char* __MemoryPool<threads>::_chunk_alloc(size_t block_size, size_t& nblocks) {
-        char* chunk;
-        size_t alloc_bytes = block_size * nblocks;
-        size_t pool_bytes = _end_free - _start_free;
-        if (pool_bytes >= alloc_bytes) {        // 内存池剩余空间完全满足需求
-            chunk = _start_free;
-            _start_free += alloc_bytes;
-        }
-        else if (pool_bytes >= block_size) {    // 内存池剩余空间不完全满足需求，但可以提供一个以上区块
-            nblocks = pool_bytes / block_size;
-            chunk = _start_free;
-            _start_free += block_size*nblocks;
-        }
-        else {                                  // 内存池剩余空间不足，连一个区块都拿不出
-            // 充分利用内存池剩余空间
-            if (pool_bytes >= __ALIGN) {
-                size_t i = _list_index(pool_bytes);
-                ((mem_block*)_start_free)->next_block = _mem_lists[i];
-                _mem_lists[i] = (mem_block*)_start_free;
-            }
-            // 【malloc()填充内存池】
-            size_t fill_bytes = 2 * alloc_bytes + _block_size(_heap_size>>4);
-            chunk = (char*)malloc(fill_bytes);
-            if (!chunk) {   // malloc失败，尝试从别的内存链表分配区块？抛出异常？
-                ;
-            }
-            _start_free = chunk + alloc_bytes;
-            _end_free = chunk + fill_bytes;
-            _heap_size += fill_bytes;
-        }
-        return chunk;
+
+// __MemoryPool静态成员变量初始化
+// __MemoryPool不能设置为<class Type>这样的模板类，否则内存池就没意义了！！！
+template <bool threads>
+char* __MemoryPool<threads>::_start_free = nullptr;
+template <bool threads>
+char* __MemoryPool<threads>::_end_free = nullptr;
+template <bool threads>
+size_t __MemoryPool<threads>::_heap_size = 0;
+template <bool threads>
+typename __MemoryPool<threads>::mem_block* volatile __MemoryPool<threads>::
+_mem_lists[__n_mem_lists] = {nullptr,0,0,0,  0,0,0,0,  0,0,0,0,  0,0,0,0};
+
+// 从内存池中分配nblocks个block_size字节的内存块所需的总内存
+template <bool threads>
+char* __MemoryPool<threads>::_chunk_alloc(size_t block_size, size_t& nblocks) {
+    char* chunk;
+    size_t alloc_bytes = block_size * nblocks;
+    size_t pool_bytes = _end_free - _start_free;
+    if (pool_bytes >= alloc_bytes) {        // 内存池剩余空间完全满足需求
+        chunk = _start_free;
+        _start_free += alloc_bytes;
     }
+    else if (pool_bytes >= block_size) {    // 内存池剩余空间不完全满足需求，但可以提供一个以上区块
+        nblocks = pool_bytes / block_size;
+        chunk = _start_free;
+        _start_free += block_size*nblocks;
+    }
+    else {                                  // 内存池剩余空间不足，连一个区块都拿不出
+        // 充分利用内存池剩余空间
+        if (pool_bytes >= __align) {
+            size_t i = _list_index(pool_bytes);
+            ((mem_block*)_start_free)->next_block = _mem_lists[i];
+            _mem_lists[i] = (mem_block*)_start_free;
+        }
+        // 【malloc()填充内存池】
+        size_t fill_bytes = 2 * alloc_bytes + _block_size(_heap_size>>4);
+        chunk = (char*)malloc(fill_bytes);
+        if (!chunk) {
+            ;   // malloc失败，尝试从别的内存链表分配区块？抛出异常？
+        }
+        _start_free = chunk + alloc_bytes;  // 【注：chunk前alloc_bytes字节算是已分配出去的，即将被用】
+        _end_free = chunk + fill_bytes;
+        _heap_size += fill_bytes;
+    }
+    return chunk;
+}
 
 // 二级内存分配器接口SecAlloc【只满足::allocate, ::reallocate】
 template <class Type>
@@ -200,8 +206,8 @@ struct SecAlloc {
     //     { return (Type*)__MemoryPool<>::allocate(nobj*sizeof(Type)); }
     // static void deallocate(Type* mem, size_t nobj) 
     //     { __MemoryPool<>::deallocate(mem, nobj*sizeof(Type)); }
-    // 基于mem，重新分配nobj个Type类对象的空间【二级内存分配器似乎无法实现reallocate...】
-    // static Type* reallocate(Type* mem, size_t nobj) {}
+    // 二级内存分配器无法实现形如 realloc(void*, size_t) 这样的 reallocate() 
+    // 必须多一个接收size_t表示原空间大小，否则无法回收！
 };
 /* 注意：
  * 原SGI STL的二级内存分配器适应STL标准后，现存于<ext/pool_allocator.h>

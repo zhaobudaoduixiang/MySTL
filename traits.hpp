@@ -1,6 +1,6 @@
 /* traits.hpp
- * SGI STL当中<type_traits.h>部分内容的简化版
- * 主要包括iterator_traits<>和__type_traits<> 
+ * 【迭代器、各类的 “特性萃取器” 】
+ * SGI STL当中<type_traits.h>的iterator_traits<>和__type_traits<>部分内容的简化版
  */
 #ifndef __TRAITS__
 #define __TRAITS__

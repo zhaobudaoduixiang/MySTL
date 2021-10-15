@@ -1,10 +1,18 @@
 /* vector.hpp
- * 动态数组
+ * 【动态数组】允许以平均O(1)时间在尾端插入元素且自动变长的“数组”（类似python的list）
  * STL当中 <stl_vector.h>/<vector> 部分内容的简化/优化版
+ * 
  * Vector<> 与 STL vector<> 不同之处：
- * insert()/erase()中的元素移动、_resize()扩容/缩容，都是通过内存拷贝(memmove/memcpy)实现
- * 即使Type类型对象带指向其它空间的指针，这样做也是完全没问题的！！！无需频繁地进行构造/解构对象！
+ * (1)扩/缩容操作直接通过Alloc::reallocate()即realloc()完成
+ * (2)insert()/erase()中，内部元素移动直接通过memmove()完成
+ * 注意：仔细思考，这是可行的！！！即使Type类对象带着指向其它空间的指针！！！
+ * 
+ * SGI STL vector<>之所以不用realloc()且要频繁地构造/析构对象，我个人觉得是因为：
+ * (1)为了对外屏蔽一、二级分配器的存在，强行将一、二级分配器统一，而二级分配器又难以实现::reallocate()
+ * (2)过于强调代码重用性，即非要调用destroy()和uninitialized_fill()/_copy()等
+ * 综上：我个人认为STL的做法是不必要，这样会造成效率低下！尤其是在vector<vector<...>>的情况下！
  */
+
 /* 关于深/浅拷贝：
  * 如果参数是右值引用，绝对要深拷贝 —— 右值引用是临时对象，若只复制指针，操作完后临时对象析构，这个刚构建的对象也没了
  * 如果参数是常引用，也要深拷贝！不然对象析构的时候会free()同一个指针多次造成程序崩溃！
@@ -32,14 +40,15 @@ using namespace std;
 // """动态数组Vector[STL vector<>]"""
 template < class Type, class Alloc = FirstAlloc<Type> >
 class Vector {
+
 public:     // 【迭代器等内部类型定义】
     static const size_t default_capacity = 31ULL;   // 默认初始大小(已经演变成缩容的“下界”了。。。)
     typedef Type        value_type;         // 
-    typedef Type*       iterator;           // 迭代器(Type*)
-    typedef Type&       reference;          // 
     typedef Type*       pointer;            // 
-    typedef size_t      size_type;          // unsigned long long
-    typedef ptrdiff_t   difference_type;    // 两个迭代器之间的距离(long long)
+    typedef Type&       reference;          // 
+    typedef size_t      size_type;          // 即 unsigned long long
+    typedef ptrdiff_t   difference_type;    // 为 long long，表示两个迭代器间的距离
+    typedef Type* iterator;  // 【原生迭代器 —— 指针】
     // 除上述以外，还应该有const_iterator, reverse_iterator, const_reference......
 
 protected:  // 【成员变量】
@@ -52,8 +61,12 @@ protected:  // 【成员变量】
 
             // 【扩/缩容】
     void _resize(size_t n) {
-        // 其实并不需要像STL vector那样进行：再分配->深拷贝...
-        // 直接用realloc调整空间或浅拷贝即可，即使Type类对象另带指针也没问题的！
+        // SGI STL vector<>此处逻辑：
+        // (1)重新分配原来“两倍”的空间【STL vector<> 不会缩容...】
+        // (2)将原空间所有对象拷贝构造到新空间【uninitialized_copy()】
+        // (3)将原空间所有对象解构
+        // (4)释放原空间
+        // 实际上真没必要哇，直接一个realloc就够了
         Type* new_start = Alloc::reallocate(_start, n);
         _end_of_storage = new_start + n;
         _finish = new_start + size();  // 不加if(new_start != _start)，尽量不破坏流水线
@@ -69,15 +82,17 @@ public:     // 【构造、析构函数】
     // 若n=0则延迟构造(_start, ... = nullptr)，value默认为Type()
     Vector(size_t n, const Type& value = Type()): 
         _start(nullptr), _finish(nullptr), _end_of_storage(nullptr) {
-        // 【注：STL vector带explicit，防止隐式转换。这里没有int/long n类型的重载，不要explicit】
+        // 【注：STL vector<>带explicit防止隐式转换。这里没有n为int/long等类型的重载，不要explicit！】
         if (n != 0) {
             _start = Alloc::allocate(n);
             _finish = _start;
             _end_of_storage = _start + n;
-            while (_finish != _end_of_storage)
-                new (_finish++) Type(value);    // mystl_construct(...)
-            // cout << "construct: " << _start << endl;
+            while (_finish != _end_of_storage)  // mystl_construct(...)
+                new (_finish++) Type(value);
         }
+        // 【疑问：要是Type类没有缺省构造函数捏？】
+        // 【解答：那就唯有缺省构造，然后一个一个地添加了！STL vector<>的逻辑与这里也是等价的！！！
+        //   其实这样可以预防一些bug，比如Type类带指针、重载了=运算符(必然有free())、然后...】
     }
     // 以[first, last)指针区域的内容构造一个数组对象
     // 若first>=last则延迟构造(_start, ... = nullptr)
@@ -89,7 +104,7 @@ public:     // 【构造、析构函数】
             _finish = _start;
             _end_of_storage = _start + n;
             while (first < last)
-                new (_finish++) Type(*first++);     // 无论*和++运算级别如何，*first++结果都一样；优先级++高于*
+                new (_finish++) Type(*first++);  // 无论*和++优先级如何，*first++结果都一样，这里优先级++高于*
         }
     }
     // 以字面量Vector<Type>({x, xx, xxx...})构造一个数组
@@ -103,29 +118,29 @@ public:     // 【构造、析构函数】
     }
     // 析构并释放空间
     ~Vector() {
-        // cout << "destroy" << _start << endl;
         mystl_destroy(_start, _finish);     // 依次析构
         Alloc::deallocate(_start);          // 释放空间
+        // cout << "destroy" << _start << endl;
     }
-    // 拷贝构造函数，默认深拷贝
-    Vector(const Vector<Type>& other, bool deepcopy=true):
+    // 拷贝构造函数，采用深拷贝【浅拷贝可以用memcpy代替】
+    Vector(const Vector<Type>& other):
         _start(other._start), _finish(other._finish), _end_of_storage(other._end_of_storage) {
-        if (deepcopy) {
-            _start = Alloc::allocate(other.size());
-            _end_of_storage = _start + other.size();
-            _finish = _start;
-            for (const Type& item : other) new (_finish++) Type(item);
-            // cout << "copy construct: " << _start << endl;
-        }
+        _start = Alloc::allocate(other.size());
+        _end_of_storage = _start + other.size();
+        _finish = _start;
+        for (const Type& item : other) 
+            new (_finish++) Type(item);
+        // cout << "copy construct: " << _start << endl;
     }
     // obj = other，采用深拷贝
     Vector<Type>& operator=(const Vector<Type>& other) {
-        if (&other != this) {               // 确保不是“自己=自己”... ←.←
-            if (!_start) this->~Vector();   // ...
+        if (&other != this) {               // 确保不是“自己=自己” ←.←
+            if (!_start) this->~Vector();   // 如果不是*this不是缺省构造的，则应先解构、释放
             _start = Alloc::allocate(other.size());
             _end_of_storage = _start + other.size();
             _finish = _start;
-            for (const Type& item : other) new (_finish++) Type(item);
+            for (const Type& item : other) 
+                new (_finish++) Type(item);
             // cout << "op=() copy construct: " << _start << endl;
         }
         return *this;
@@ -133,11 +148,11 @@ public:     // 【构造、析构函数】
 
 public:     // 【改、查】类定义中不超一行自动内联
     // 已有的元素个数
-    size_t size() const { return size_t(_finish - _start); }
+    size_t size()       const { return size_t(_finish - _start); }
     // 总共可容纳的元素个数
-    size_t capacity() const { return size_t(_end_of_storage - _start); }
+    size_t capacity()   const { return size_t(_end_of_storage - _start); }
     // 是否为空
-    bool empty() const { return _start == _finish; }
+    bool empty()        const { return _start == _finish; }
     // 
     iterator begin()    const { return _start; }            // 更标准的定义应该是const_iterator begin() const {...}
     iterator end()      const { return _finish; }           // 且应该重载多一个iterator begin() {...}
@@ -174,7 +189,7 @@ public:     // 【增】
         memmove(position+n, position,                       // 从后向前，将[position, _finish)依次后移n格
                 sizeof(Type)*size_t(_finish-position));     // memmove(void* dst, void* src, size_t nbytes)，通过char*逐个字节拷贝可复现
         _finish += n;
-        for (size_t i=0; i<n; ++i)                             // 从position开始依次以value值构造n个对象
+        for (size_t i=0; i<n; ++i)                          // 从position开始依次以value值构造n个对象
             new (position++) Type(value);
     }
     // 在position指针处插入元素item

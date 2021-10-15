@@ -1,6 +1,7 @@
 /* slist.hpp
- * 单向链表（slist, single list）
+ * 【单向链表(slist, single list)】
  * STL当中 <stl_slist.h>/<slist>/新版<forward_list> 部分内容的简化版
+ * 
  * SList<> 与 STL slist<>/forward_list<> 的不同之处：
  * (1)除“头端插入/删除push_front()/pop_front()”外，也支持高效的尾端插入push_back()
  * (2)类设计上没有采用复杂继承关系，因为个人认为真没必要...
@@ -45,20 +46,20 @@ struct __SListIterator {
     typedef Type*                   pointer;
     typedef Type&                   reference;
     typedef ptrdiff_t               difference_type;
+    typedef __SListIterator<Type>   iterator;
     typedef __SListNode<Type>       _Node;
-    typedef __SListIterator<Type>   _Iterator;
     // ！！！本体！！！
     _Node* node_p;
-public: // 构造函数
+    // 构造函数
     __SListIterator(_Node* slist_node_p = nullptr): node_p(slist_node_p) {}
-    __SListIterator(const _Iterator& other): node_p(other.node_p) {}
-public: // ++self, self++, self==other, self!=other, *self, self->
-    _Iterator& operator++() 
+    __SListIterator(const iterator& other): node_p(other.node_p) {}
+    // ++self, self++, self==other, self!=other, *self, self->
+    iterator& operator++() 
         { node_p=node_p->next;  return *this; }
-    _Iterator operator++(int) 
-        { _Iterator tmp(*this);  node_p=node_p->next;  return tmp; }
-    bool operator==(const _Iterator& other) const { return node_p == other.node_p; }
-    bool operator!=(const _Iterator& other) const { return node_p != other.node_p; }
+    iterator operator++(int) 
+        { iterator tmp(*this);  node_p=node_p->next;  return tmp; }
+    bool operator==(const iterator& other)  const { return node_p == other.node_p; }
+    bool operator!=(const iterator& other)  const { return node_p != other.node_p; }
     Type& operator*()                       const { return node_p->data; }
     _Node& operator->()                     const { return *node_p; }   // 为什么STL的要返回Type*???
     operator _Node*()                       const { return node_p; }
@@ -68,14 +69,21 @@ public: // ++self, self++, self==other, self!=other, *self, self->
 // """单链表SList[STL forward_list<>]"""
 template < class Type, class Alloc = SecAlloc<__SListNode<Type>> >
 class SList {
+
 public:     // 【内部类型定义】
-    typedef Type                    value_type;
-    typedef __SListIterator<Type>   iterator;
+    typedef Type        value_type;
+    typedef Type*       pointer;
+    typedef Type&       reference;
+    typedef size_t      size_type;
+    typedef ptrdiff_t   difference_type;
+    typedef __SListIterator<Type>   iterator;  // 【迭代器】
     typedef __SListNode<Type>       _Node;
+
 private:    // 【成员变量】
-    _Node* _head;   // 头节点指针
-    _Node* _tail;   // 尾节点指针
-    size_t _count;  // 节点数
+    _Node* _head;       // 头节点指针
+    _Node* _tail;       // 尾节点指针
+    size_t _count;      // 节点数
+
 public:     // 【构造/析构函数】
     SList(): _head(nullptr), _tail(nullptr), _count(0) {}
     SList(initializer_list<Type> init_list): 
@@ -94,6 +102,7 @@ public:     // 【构造/析构函数】
         (node_p->data).~Type();
         Alloc::deallocate(node_p);
     }
+
 public:     // 【改、查】类定义中不超一行自动内联
     size_t size()       const { return _count; }
     bool empty()        const { return _count==0; }
@@ -106,6 +115,7 @@ public:     // 【改、查】类定义中不超一行自动内联
             if (*cur == value) return cur;
         return iterator();
     }
+
 public:     // 【增】
     // 头端加入一个值为value的节点
     void push_front(const Type& value) {
@@ -128,6 +138,7 @@ public:     // 【增】
         node_p->next = make_node(value, (_Node*)node_p);
         ++_count;
     }
+
 public:     // 【删】
     // 头端弹出一个节点，返回该节点的数据
     Type pop_front() {
