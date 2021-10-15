@@ -52,7 +52,9 @@ inline void mystl_destroy(ForwardIterator first,
  */
 
 
-// """一级内存分配器FirstAlloc【满足::allocate, ::reallocate, ::deallocate接口】"""
+// """一级内存分配器FirstAlloc【适用于大片连续空间分配】"""
+// 具有 ::allocate() / ::deallocate() / ::reallocate() 功能
+// 基于 malloc() / realloc() / free()
 template <class Type>
 struct FirstAlloc {
     // 分配nobj个Type类对象的空间(malloc)
@@ -77,9 +79,10 @@ struct FirstAlloc {
 };
 
 
-// """二级内存分配器SecAlloc——内存池分配器【只满足::allocate, ::reallocate】"""
-// 内存池【STL中的“二级内存分配器模板(__default_alloc_template)”】
-template <bool threads = false>     // 是否为多线程，默认为否
+// """二级内存分配器SecAlloc【适用于链式数据结构，比如链表、红黑树等】"""
+// 只具有 ::allocate() / ::deallocate()  功能
+// 基于 “内存池” 实现，内存池如下[STL __default_alloc_template]
+template <bool threads = false>  // 是否为多线程环境，默认为否，可重载偏特化
 class __MemoryPool {
     // 一些常量
     static const size_t __align             = 8;    // 分配的内存大小为“8字节对齐”
@@ -119,13 +122,13 @@ class __MemoryPool {
         // _mem_lists[_list_index(block_size)] = (mem_block*)chunk;
         return (mem_block*)chunk;
     }
-    // 从内存池中分配nblocks个block_size字节的内存块所需的总内存【静态变量未初始化，放外边再定义】
+    // 从内存池中分配nblocks个block_size字节的内存块所需的总内存【太长了，放外边再定义】
     static char* _chunk_alloc(size_t block_size, size_t& nblocks);
 
 public:
     // 分配nbytes个字节的空间
     static void* allocate(size_t nbytes) {
-        if (nbytes > __max_bytes)                   // 大于128字节，使用malloc分配
+        if (nbytes > __max_bytes)                   // 大于128字节，使用malloc()分配
             return malloc(nbytes);
         size_t i = _list_index(nbytes);             // 定位到对应内存链表，然后拨出内存块
         mem_block* cur_block = 
@@ -136,7 +139,7 @@ public:
     }
     // 释放mem所指空间，其大小为nbytes个字节
     static void deallocate(void* mem, size_t nbytes) {
-        if (nbytes > __max_bytes)                   // 大于128字节，使用free释放
+        if (nbytes > __max_bytes)                   // 大于128字节，使用free()释放
             return free(mem);
         size_t i = _list_index(nbytes);
         mem_block* next_block = _mem_lists[i];      // 以下即对应内存链表.push_front(mem)
@@ -147,7 +150,7 @@ public:
 };
 
 // __MemoryPool静态成员变量初始化
-// __MemoryPool不能设置为<class Type>这样的模板类，否则内存池就没意义了！！！
+// __MemoryPool不能设置为<class Type>这样的模板类，否则内存池就没意义了！
 template <bool threads>
 char* __MemoryPool<threads>::_start_free = nullptr;
 template <bool threads>
@@ -193,28 +196,24 @@ char* __MemoryPool<threads>::_chunk_alloc(size_t block_size, size_t& nblocks) {
     return chunk;
 }
 
-// 二级内存分配器接口SecAlloc【只满足::allocate, ::reallocate】
+// 二级内存分配器接口SecAlloc【只具有 ::allocate() / ::deallocate()  功能】
 template <class Type>
 struct SecAlloc {
-    // 分配nobj个【默认nobj=1】Type类对象的空间
+    // 分配 1 个 Type 类对象的空间
     static Type* allocate() 
         { return (Type*)__MemoryPool<>::allocate(sizeof(Type)); }
-    // 释放mem的空间，其大小为nobj个【默认nobj=1】Type类对象的大小
+    // 释放mem的空间，其大小为 1 个 Type 类对象所占空间
     static void deallocate(Type* mem) 
         { __MemoryPool<>::deallocate(mem, sizeof(Type)); }
-    // static Type* allocate(size_t nobj) 
-    //     { return (Type*)__MemoryPool<>::allocate(nobj*sizeof(Type)); }
-    // static void deallocate(Type* mem, size_t nobj) 
-    //     { __MemoryPool<>::deallocate(mem, nobj*sizeof(Type)); }
-    // 二级内存分配器无法实现形如 realloc(void*, size_t) 这样的 reallocate() 
-    // 必须多一个接收size_t表示原空间大小，否则无法回收！
+    // SecAlloc无法实现正常的reallocate(void*, size_t)，必须多一个接收size_t表示原空间大小，否则无法回收！
 };
 /* 注意：
  * 原SGI STL的二级内存分配器适应STL标准后，现存于<ext/pool_allocator.h>
  * 使用时将std::allocator替换成__gnu_cxx::__pool_alloc<Type>即可
  * 不过，在大片内存管理上（比如vector和deque），std::allocator其实快很多！！！
  * 只是，对链式数据结构（比如list和map），二级内存分配器会让空间利用率更高 —— 
- * 因为每一次::operator new/malloc都会有标记部分，以供系统回收/对齐，二级内存分配器会让malloc次数大幅减少！
+ * 因为每一次::operator new/malloc()所得内存块都会有标记部分，以供系统回收/对齐
+ * 对于链式数据结构，其节点大小一致，因此这些标记部分都是多余的，二级内存分配器可让malloc()次数大幅减少！！！
  */
 
 
