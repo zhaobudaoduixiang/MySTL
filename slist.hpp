@@ -33,11 +33,11 @@ using namespace std;
 
 // SList节点
 template <class Type> 
-struct __SListNode { 
-    Type data;                  // ...
-    __SListNode<Type>* next;    // ...
+struct __SListNode {
+    Type                data;   // ...
+    __SListNode<Type>*  next;   // ...
 };
-// SList迭代器
+// SList迭代器【可直接强制转换为__SListNode<Type>*】
 template <class Type>
 struct __SListIterator {
     // 内部类型定义
@@ -51,9 +51,10 @@ struct __SListIterator {
     // ！！！本体！！！
     _Node* node_p;
     // 构造函数
-    __SListIterator(_Node* slist_node_p = nullptr): node_p(slist_node_p) {}
+    __SListIterator(): node_p(nullptr) {}
+    __SListIterator(_Node* slist_node_p): node_p(slist_node_p) {}
     __SListIterator(const iterator& other): node_p(other.node_p) {}
-    // ++self, self++, self==other, self!=other, *self, self->
+    // ++self, self++, self==other, self!=other, *self, ->self
     iterator& operator++() 
         { node_p=node_p->next;  return *this; }
     iterator operator++(int) 
@@ -61,7 +62,7 @@ struct __SListIterator {
     bool operator==(const iterator& other)  const { return node_p == other.node_p; }
     bool operator!=(const iterator& other)  const { return node_p != other.node_p; }
     Type& operator*()                       const { return node_p->data; }
-    _Node& operator->()                     const { return *node_p; }   // 为什么STL的要返回Type*???
+    Type* operator->()                      const { return &(node_p->data); }   // 【注：是->self，不是self->】
     operator _Node*()                       const { return node_p; }
 };
 
@@ -97,8 +98,7 @@ public:     // 【构造/析构函数】
         for (const Type& item : other)
             push_back(item);
     }
-    ~SList() 
-        { clear(); }
+    ~SList() { clear(); }
 
 public:     // 【构造/析构一个节点，因为不直接用new分配空间，只能放到这里】
     static _Node* make_node(const Type& data, void* next) {
@@ -142,9 +142,9 @@ public:     // 【增】
             { _tail->next=make_node(value, nullptr);  _tail=_tail->next; }
         ++_count; 
     }
-    // 在迭代器node_p后插入一个值为value的节点【注：迭代器可转换为_Node*，故可输入节点指针】
-    void insert_after(iterator node_p, const Type& value) {
-        node_p->next = make_node(value, (_Node*)node_p);
+    // 在迭代器node后插入一个值为value的节点【注：迭代器可转换为_Node*，故可输入节点指针】
+    void insert_after(iterator node, const Type& value) {
+        node->next = make_node(value, (_Node*)node);
         ++_count;
     }
 
@@ -162,9 +162,9 @@ public:     // 【删】
         --_count;
         return tmp_data;
     }
-    // 删除迭代器node_p后的一个节点【注：迭代器可转换为_Node*，故可输入节点指针】
-    void erase_after(iterator node_p) {
-        _Node* cur_node = (_Node*)node_p;
+    // 删除迭代器node后的一个节点【注：迭代器可转换为_Node*，故可输入节点指针】
+    void erase_after(iterator node) {
+        _Node* cur_node = (_Node*)node;
         cur_node->next = cur_node->next->next;
         destroy_node(cur_node->next);
         --_count;
@@ -181,8 +181,8 @@ public:     // 【删】
 };
 
 template <class Type>
-ostream& operator<<(ostream& out, const SList<Type>& slst) {
-    for (const Type& item : slst) out << item << " -> ";
+ostream& operator<<(ostream& out, const SList<Type>& single_list) {
+    for (const Type& item : single_list) out << item << " -> ";
     return out << "null";
 }
 
@@ -195,6 +195,13 @@ ostream& operator<<(ostream& out, const SList<Type>& slst) {
 
 /* // 测试(OK)
 int main(int argc, char const *argv[]) {
+
+    SList<int> tmp1({1, 2, 3, 4});
+    SList<int> tmp2(tmp1);
+    cout << tmp1 << endl;
+    cout << tmp2 << endl;
+    SList<int>::iterator ite = tmp1.begin();
+    cout << *ite << endl;
 
     // {
     //     // clock_t st = clock();
