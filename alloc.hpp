@@ -66,8 +66,8 @@ struct FirstAlloc {
     // 只是free(mem)
     static void deallocate(Type* mem, size_t nobj = 1) { free(mem); }
     // 基于mem，重新分配nobj个Type类对象的空间(realloc)
-    static Type* reallocate(Type* mem, size_t nobj) {               // 【_msize(ptr)运算符可知分配了多少内存给ptr】
-        Type* new_mem = (Type*)realloc(mem, nobj*sizeof(Type));     // 【realloc自带拷贝和free！】
+    static Type* reallocate(Type* mem, size_t nobj) {               // _msize(ptr)运算符可知分配了多少内存给ptr
+        Type* new_mem = (Type*)realloc(mem, nobj*sizeof(Type));     // realloc自带拷贝和free！
         if (!new_mem) {
             perror("out of memory!\n");
             free(mem);  // realloc失败，mem未释放！
@@ -183,7 +183,7 @@ char* __MemoryPool<threads>::_chunk_alloc(size_t block_size, size_t& nblocks) {
             ((mem_block*)_start_free)->next_block = _mem_lists[i];
             _mem_lists[i] = (mem_block*)_start_free;
         }
-        // 【malloc()填充内存池】
+        // malloc()填充内存池
         size_t fill_bytes = 2 * alloc_bytes + _block_size(_heap_size>>4);
         chunk = (char*)malloc(fill_bytes);
         if (!chunk) {
