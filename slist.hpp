@@ -85,22 +85,31 @@ private:    // 【成员变量】
     size_t _count;      // 节点数
 
 public:     // 【构造/析构函数】
-    SList(): _head(nullptr), _tail(nullptr), _count(0) {}
+    SList(): 
+        _head(nullptr), _tail(nullptr), _count(0) {}
     SList(initializer_list<Type> init_list): 
         _head(nullptr), _tail(nullptr), _count(0) {
         for (const auto& item : init_list)
             push_back(item);
     }
-    ~SList() { clear(); }
+    SList(const SList<Type, Alloc>& other): 
+        _head(nullptr), _tail(nullptr), _count(0) {
+        for (const Type& item : other)
+            push_back(item);
+    }
+    ~SList() 
+        { clear(); }
+
+public:     // 【构造/析构一个节点，因为不直接用new分配空间，只能放到这里】
     static _Node* make_node(const Type& data, void* next) {
         _Node* new_node = Alloc::allocate();
         new_node->data = data;
         new_node->next = (_Node*)next;
         return new_node;
     }
-    static void destroy_node(_Node* node_p) {
-        (node_p->data).~Type();
-        Alloc::deallocate(node_p);
+    static void destroy_node(_Node* node) {
+        (node->data).~Type();       // 析构*node所带data
+        Alloc::deallocate(node);    // 释放*node空间
     }
 
 public:     // 【改、查】类定义中不超一行自动内联
@@ -113,7 +122,7 @@ public:     // 【改、查】类定义中不超一行自动内联
     iterator find(const Type& value) {
         for (iterator cur=begin(); cur!=end(); ++cur)
             if (*cur == value) return cur;
-        return iterator();
+        return iterator();  // 即end()
     }
 
 public:     // 【增】
