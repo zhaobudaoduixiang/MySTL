@@ -17,7 +17,7 @@
  * 如果参数是右值引用，绝对要深拷贝 —— 右值引用是临时对象，若只复制指针，操作完后临时对象析构，这个刚构建的对象也没了
  * 如果参数是常引用，也要深拷贝！不然对象析构的时候会free()同一个指针多次造成程序崩溃！
  * 综上，总之深拷贝就对了！
- * (1)像如下情况，编译器 不会 进行多余的深拷贝：
+ * (1)像如下情况，编译器 “不会” 进行多余的深拷贝：
  * template<class Type>
  * Vector<Type>& generate_Vector() { Vector<Type> tmp; ...; return tmp; }
  * Vector<xx> vec = generate_Vector<xx>()
@@ -89,7 +89,7 @@ public:     // 【构造、析构函数】
             _start = data_allocator::allocate(n);
             _finish = _start;
             _end_of_storage = _start + n;
-            while (_finish != _end_of_storage)  // mystl_construct(...)
+            while (_finish < _end_of_storage)  // mystl::construct(...)
                 new (_finish++) Type(value);
         }
         // 【疑问：要是Type类没有缺省构造函数捏？虽然STL vector<>的构造函数也必须有Type()，不过如果是new捏？】
@@ -115,13 +115,14 @@ public:     // 【构造、析构函数】
         _start = data_allocator::allocate(init_list.size());
         _finish = _start;
         _end_of_storage = _start + init_list.size();
-        for (const auto& item : init_list) new (_finish++) Type(item);
+        for (const auto& item : init_list) 
+            new (_finish++) Type(item);
         // cout << "construct: " << _start << endl;
     }
 
     // 析构并释放空间
     ~Vector() {
-        mystl_destroy(_start, _finish);         // 依次析构
+        mystl::destroy(_start, _finish);        // 依次析构
         data_allocator::deallocate(_start);     // 释放空间
         // cout << "destroy" << _start << endl;
     }
@@ -129,9 +130,9 @@ public:     // 【构造、析构函数】
     // 拷贝构造函数，采用深拷贝【浅拷贝可以用memcpy代替】
     Vector(const Vector<Type, Alloc>& other):
         _start(nullptr), _finish(nullptr), _end_of_storage(nullptr) {
-        if (other._start == other._finish) {
-            _start = data_allocator::allocate(other.size());
-            _end_of_storage = _start + other.size();
+        if (other._start) {  // other不是缺省构造的
+            _start = data_allocator::allocate(other.capacity());
+            _end_of_storage = _start + other.capacity();
             _finish = _start;
             for (const Type& item : other) 
                 new (_finish++) Type(item);
@@ -140,12 +141,13 @@ public:     // 【构造、析构函数】
     }
     Vector(Vector<Type, Alloc>&& other):
         _start(nullptr), _finish(nullptr), _end_of_storage(nullptr) {
-        if (other._start == other._finish) {
-            _start = data_allocator::allocate(other.size());
-            _end_of_storage = _start + other.size();
+        if (other._start) {  // other不是缺省构造的
+            _start = data_allocator::allocate(other.capacity());
+            _end_of_storage = _start + other.capacity();
             _finish = _start;
             for (const Type& item : other) 
                 new (_finish++) Type(item);
+            // cout << "copy construct: " << _start << endl;
         }
     }
     
@@ -163,20 +165,18 @@ public:     // 【构造、析构函数】
         return *this;
     }
 
-    // // 很少用：指定初始容量大小，而不进行对象初始化，外界看来size()=0
-    // // 若capacity=0则延迟构造(_start, ... = nullptr)
-    // static const Vector<Type, Alloc>& make_static_vector(size_t init_capacity) {
-    //     Vector<Type, Alloc> tmp;
-    //     if (init_capacity != 0) {
-    //         tmp._start = data_allocator::allocate(init_capacity);
-    //         tmp._finish = tmp._start;
-    //         tmp._end_of_storage = tmp._start + init_capacity;
-    //         // 将初始空间全部置0，这样即使越界访问，也能尽量避免free()产生的异常
-    //         // 也可以直接_start = calloc(...)代替
-    //         // memset(_start, 0, init_capacity*sizeof(Type));
-    //     }
-    //     return tmp;
-    // }
+    // 指定初始容量大小，而不进行对象初始化，外界看来size()=0
+    // 若capacity=0则延迟构造(_start, ... = nullptr)
+    static Vector<Type, Alloc> make_static_vector(size_t init_capacity) {
+        Vector<Type, Alloc> tmp;
+        if (init_capacity != 0) {
+            tmp._resize(init_capacity);
+            // 将初始空间全部置0，这样即使越界访问，也能尽量避免free(未分配的空间)产生的异常
+            // 也可直接_start = calloc(...)代替
+            // memset(_start, 0, init_capacity*sizeof(Type));
+        }
+        return tmp;
+    }
 
 public:     // 【Basic Accessor】类定义中不超一行自动内联
     size_t size()       const { return size_t(_finish - _start); }          // 已有的元素个数
@@ -250,7 +250,7 @@ public:     // 【删】
             cerr << "[first, last) is out of range!" << endl;
             return;
         }
-        mystl_destroy(first, last);             // 对[first, last)的对象析构
+        mystl::destroy(first, last);            // 对[first, last)的对象析构
         const size_t n = size_t(last - first);
         memmove(first, last, sizeof(Type)*n);   // 从前向后，将last开始后边剩余元素依次前移n格
         _finish -= n;

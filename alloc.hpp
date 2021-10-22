@@ -22,51 +22,53 @@
 #include <cstdlib>      // malloc, realloc, free
 #include <cerrno>       // perror(print error)
 #include "traits.hpp"   // TypeTraits<>, IteratorTraits<>
-using namespace std;
 
 
-// """在[first, last)区域内以value值构造对象[STL uninitialized_fill()]"""
-// 似乎真没什么必要... uninitialized_fill_n()的源码在《STL源码剖析》的3.7
-template<class ForwardIterator, class Type>
-inline void __mystl_construct(ForwardIterator first, 
-                              ForwardIterator last, 
-                              const Type& value, TpFalse)   // 一般非POD类型
-    { for(; first!=last; ++first) new (first) Type(value); }
-template<class ForwardIterator, class Type>
-inline void __mystl_construct(ForwardIterator first, 
-                              ForwardIterator last, 
-                              const Type& value, TpTrue)    // POD类型
-    { for(; first!=last; ++first) *first=value; }
-template <class ForwardIterator, class Type>
-inline void mystl_construct(ForwardIterator first, 
-                            ForwardIterator last, 
-                            const Type& value)
-    { __mystl_construct(first, last, value, 
-                        typename TypeTraits<typename IteratorTraits<ForwardIterator>::value_type>
-                        ::is_POD_type()); }
+namespace mystl {
+    // """在[first, last)区域内以value值构造对象[STL uninitialized_fill()]"""
+    // 似乎真没什么必要... uninitialized_fill_n()的源码在《STL源码剖析》的3.7
+    template<class ForwardIterator, class Type>
+    inline void __construct(ForwardIterator first, 
+                                ForwardIterator last, 
+                                const Type& value, TpFalse)   // 一般非POD类型
+        { for(; first!=last; ++first) new (first) Type(value); }
+    template<class ForwardIterator, class Type>
+    inline void __construct(ForwardIterator first, 
+                                ForwardIterator last, 
+                                const Type& value, TpTrue)    // POD类型
+        { for(; first!=last; ++first) *first=value; }
+    template <class ForwardIterator, class Type>
+    inline void construct(ForwardIterator first, 
+                                ForwardIterator last, 
+                                const Type& value)
+        { __construct(first, last, value, 
+                            typename TypeTraits<typename IteratorTraits<ForwardIterator>::value_type>
+                            ::is_POD_type()); }
 
-// """解构[first, last)区域的全部对象[STL destroy()]"""
-template <class ForwardIterator, class Type>
-inline void __mystl_destroy(ForwardIterator first, 
-                            ForwardIterator last, TpTrue) {}    // 有trivial_destructor的类型
-template <class ForwardIterator, class Type>
-inline void __mystl_destroy(ForwardIterator first, 
-                            ForwardIterator last, TpFalse)      // 无trivial_destructor的类型
-    { for(; first != last; ++first) first->~Type(); }
-template <class ForwardIterator>
-inline void mystl_destroy(ForwardIterator first, 
-                          ForwardIterator last) {
-    __mystl_destroy<ForwardIterator, typename IteratorTraits<ForwardIterator>::value_type>(
-        first, last, 
-        typename TypeTraits<typename IteratorTraits<ForwardIterator>::value_type>
-        ::has_trivail_destructor()
-    );
-}
+    // """解构[first, last)区域的全部对象[STL destroy()]"""
+    template <class ForwardIterator, class Type>
+    inline void __destroy(ForwardIterator first, 
+                                ForwardIterator last, TpTrue) {}    // 有trivial_destructor的类型
+    template <class ForwardIterator, class Type>
+    inline void __destroy(ForwardIterator first, 
+                                ForwardIterator last, TpFalse)      // 无trivial_destructor的类型
+        { for(; first != last; ++first) first->~Type(); }
+    template <class ForwardIterator>
+    inline void destroy(ForwardIterator first, 
+                            ForwardIterator last) {
+        __destroy<ForwardIterator, typename IteratorTraits<ForwardIterator>::value_type>(
+            first, last, 
+            typename TypeTraits<typename IteratorTraits<ForwardIterator>::value_type>
+            ::has_trivail_destructor()
+        );
+    }
 /* SGI STL中惯用的inline void construct(T1*, const T2&)只是单纯的placement new，这里不进行包装
  * 单个的inline void destroy(T*)也只是单纯地调用析构函数，这里也不进行包装
  */
+};
 
 
+using namespace std;
 // """一级内存分配器FirstAlloc【适用于大片连续空间分配，如Vector<>等】"""
 // 具有 ::allocate()即malloc() / ::deallocate()即free() /::reallocate()即realloc()
 struct FirstAlloc {

@@ -23,13 +23,16 @@ private:
 public:
     Queue(): _self(new SList<Type>()) {}
     ~Queue() { delete _self; }
+public:
     bool size()     const {return _self->size();}
     bool empty()    const {return _self->empty();}
-    Type& front()   const {return _self->front();}
-    Type& back()    const {return _self->back();}
+    Type& front() {return _self->front();}
+    Type& back()  {return _self->back();}
+    const Type& front() const {return _self->front();}
+    const Type& back()  const {return _self->back();}
     void push(const Type& item) {_self->push_back(item);}
     Type pop()                  {return _self->pop_front();}
-    // void swap(const Queue<Type, SList<Type>>& other);
+    // void swap(Queue<Type, SList<Type>>& other);
 };
 
 

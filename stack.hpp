@@ -13,44 +13,41 @@
 using namespace std;
 
 
-template < class Type, class Seq = Deque<Type> >
-class Stack {};
-
-
-template <class Type>
-class Stack< Type, SList<Type> > {
+template < class Type, class Seq = SList<Type> >
+class Stack {
 private:
-    SList<Type>* _self;
+    Seq _self;
 public:
-    Stack(): _self(new SList<Type>()) {}
-    ~Stack() { delete _self; }
-    bool size()     const {return _self->size();}
-    bool empty()    const {return _self->empty();}
-    Type& front()   const {return _self->front();}
-    Type& back()    const {return _self->back();}
-    void push(const Type& item) {_self->push_front(item);}
-    Type pop()                  {return _self->pop_front();}
-    // void swap(const& other);
+    Stack(): _self(Seq()) {}
+    ~Stack() {}
+public:
+    size_t size() const { return _self.size(); }
+    bool empty()  const { return _self.empty(); }
+    Type& top()             { return _self.front(); }
+    const Type& top() const { return _self.front(); }
+    void push(const Type& item) { _self.push_front(item); }
+    Type pop()                  {return _self.pop_front();}
 };
 
 
 template <class Type>
 class Stack< Type, Vector<Type> > {
 private:
-    Vector<Type>* _self;
+    Vector<Type> _self;
 public:
     Stack(): 
-        _self(new Vector<Type>()) {}
-    // Stack(size_t init_capacity): 
-    //     _self(new Vector<Type>(Vector<Type>::make_static_vector(init_capacity))) {}
-    ~Stack() { delete _self; }
-    bool size()     const {return _self->size();}
-    bool empty()    const {return _self->empty();}
-    Type& front()   const {return _self->front();}
-    Type& back()    const {return _self->back();}
-    void push(const Type& item) {_self->push_back(item);}
-    Type pop()                  {return _self->pop_back();}
-    // void swap(const& other);
+        _self(Vector<Type>()) {}
+    Stack(size_t init_capacity):
+        _self(Vector<Type>::make_static_vector(init_capacity)) {}
+    ~Stack() { /* 不需要析构函数，_self生存时间到了会自动析构 */ }
+public:
+    size_t size() const { return _self.size(); }
+    bool empty()  const { return _self.empty(); }
+    Type& top()             { return _self.back(); }
+    const Type& top() const { return _self.back(); }
+    void push(const Type& item) { _self.push_back(item); }
+    Type pop()                  {return _self.pop_back();}
+    // void swap(Stack<Type, Vector<Type>>& other);
 };
 
 

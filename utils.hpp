@@ -5,31 +5,34 @@
 #ifndef __UTILITIES__
 #define __UTILITIES__
 #include <iostream>  // ostream
+
+
+namespace mystl {
+    // [STL swap()]
+    template <class Type>
+    inline void swap(const Type& a, const Type& b) { Type tmp=a; a=b; b=tmp; }
+
+    // [STL max()]
+    template <class Type>
+    inline const Type& max(const Type& a, const Type& b) { return b>a ? b : a; }
+    template <class Type, class Compare>
+    inline const Type& max(const Type& a, const Type& b, Compare comp) { return comp(b, a) ? b : a; }
+
+    // [STL min()]
+    template <class Type>
+    inline const Type& min(const Type& a, const Type& b) { return b<a ? b : a; }
+    template <class Type, class Compare>
+    inline const Type& min(const Type& a, const Type& b, Compare comp) { return comp(b, a) ? b : a; }
+
+    // []
+    template <class T1, class T2>
+    inline bool same_type(const T1& a, const T2& b) { return false; }
+    template <class Type>
+    inline bool same_type(const Type& a, const Type& b) { return true; }
+};
+
+
 using namespace std;
-
-
-// [STL swap()]
-template <class Type>
-inline void mystl_swap(const Type& a, const Type& b) { Type tmp=a; a=b; b=tmp; }
-
-// [STL max()]
-template <class Type>
-inline const Type& mystl_max(const Type& a, const Type& b) { return b>a ? b : a; }
-template <class Type, class Compare>
-inline const Type& mystl_max(const Type& a, const Type& b, Compare comp) { return comp(b, a) ? b : a; }
-
-// [STL min()]
-template <class Type>
-inline const Type& mystl_min(const Type& a, const Type& b) { return b<a ? b : a; }
-template <class Type, class Compare>
-inline const Type& mystl_min(const Type& a, const Type& b, Compare comp) { return comp(b, a) ? b : a; }
-
-// []
-template <class T1, class T2>
-inline bool same_type(const T1& a, const T2& b) { return false; }
-template <class Type>
-inline bool same_type(const Type& a, const Type& b) { return true; }
-
 // [STL greater<>]
 template <class Type> 
 struct Greater { 

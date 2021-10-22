@@ -7,7 +7,7 @@
 #include <initializer_list>
 #include "alloc.hpp"    // FirstAlloc, Allocator
 #include "traits.hpp"   // ...
-#include "utils.hpp"    // mystl_max()
+#include "utils.hpp"    // mystl::max()
 using namespace std;
 
 
@@ -122,7 +122,7 @@ public:     // 【构造/析构函数】
     Deque(size_t n, const Type& value = Type()) {
         // 分配中控器_map空间
         size_t needed_buffers = n / buffer_size + 1;
-        _map_size = mystl_max(size_t(init_map_size), needed_buffers+2); // ???
+        _map_size = mystl::max(size_t(init_map_size), needed_buffers+2);    // static const 变量未初始化？？？
         _map = map_allocator::allocate(_map_size);
         // 分配各个所需缓冲区的空间
         Type** first = _map + (_map_size-needed_buffers)/2;

@@ -198,7 +198,7 @@ public:     // 【删】
         _count = 0;
     }
     // 交换两个链表
-    // void swap(const SList<Type, Alloc>& other) {}
+    // void swap(SList<Type, Alloc>& other) {}
 };
 
 // 打印

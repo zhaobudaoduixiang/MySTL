@@ -84,7 +84,7 @@ public:     // 【构造/析构函数】
         }
     }
     ~PriorityQueue() {
-        mystl_destroy(_start, _finish);
+        mystl::destroy(_start, _finish);
         data_allocator::deallocate(_start);
     }
 
