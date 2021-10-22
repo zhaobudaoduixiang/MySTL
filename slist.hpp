@@ -37,33 +37,37 @@ struct __SListNode {
     Type                data;   // ...
     __SListNode<Type>*  next;   // ...
 };
+
+
 // SList迭代器【可直接强制转换为__SListNode<Type>*】
 template <class Type>
 struct __SListIterator {
-    // 内部类型定义
-    typedef ForwardIteratorTag      iterator_category;
+    // 类型定义
+    typedef ForwardIteratorTag      iterator_category;  // 前向迭代器
     typedef Type                    value_type;
     typedef Type*                   pointer;
     typedef Type&                   reference;
     typedef ptrdiff_t               difference_type;
     typedef __SListIterator<Type>   iterator;
     typedef __SListNode<Type>       _Node;
-    // ！！！本体！！！
+    // 本体 —— 节点指针
     _Node* node_p;
     // 构造函数
     __SListIterator(): node_p(nullptr) {}
     __SListIterator(_Node* slist_node_p): node_p(slist_node_p) {}
     __SListIterator(const iterator& other): node_p(other.node_p) {}
-    // ++self, self++, self==other, self!=other, *self, ->self
+    // ++self, self++, self==other, self!=other, *self, ->self, (_Node*)self
     iterator& operator++() 
         { node_p=node_p->next;  return *this; }
     iterator operator++(int) 
         { iterator tmp(*this);  node_p=node_p->next;  return tmp; }
-    bool operator==(const iterator& other)  const { return node_p == other.node_p; }
-    bool operator!=(const iterator& other)  const { return node_p != other.node_p; }
-    Type& operator*()                       const { return node_p->data; }
-    Type* operator->()                      const { return &(node_p->data); }   // 【注：是->self，不是self->】
-    operator _Node*()                       const { return node_p; }
+    bool operator==(const iterator& other) const 
+        { return node_p == other.node_p; }
+    bool operator!=(const iterator& other) const 
+        { return node_p != other.node_p; }
+    Type& operator*()   const { return node_p->data; }
+    Type* operator->()  const { return &(node_p->data); }   // 【注：是->self，不是self->】
+    operator _Node*()   const { return node_p; }
 };
 
 
@@ -167,6 +171,7 @@ public:     // 【删】
             cerr << "warning: SList(at " << this << ") is empty!" << endl; 
             return Type(); 
         }
+        // 以下空/非空情况操作一致
         _Node* tmp_node = _head;
         Type tmp_data = tmp_node->data;
         _head = _head->next;
@@ -188,8 +193,12 @@ public:     // 【删】
             next_node = cur_node->next;
             destroy_node(cur_node);
         }
+        _head = nullptr;
+        _tail = nullptr;
         _count = 0;
     }
+    // 交换两个链表
+    // void swap(const SList<Type, Alloc>& other) {}
 };
 
 // 打印
