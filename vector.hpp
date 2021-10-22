@@ -32,23 +32,25 @@
 #define __VECTOR__
 #include <iostream>         // cout, cerr, ostream... 以及 <new>/new, <cstring>/memmove, <cstdlib>/malloc, <windows.h>/system 等
 #include <initializer_list> // initializer_list<>
+#include <cstring>
 #include "alloc.hpp"        // FirstAlloc<>
 #include "traits.hpp"       // TypeTraits<>
 using namespace std;
 
 
 // """动态数组Vector[STL vector<>]"""
-template < class Type, class Alloc = FirstAlloc<Type> >
+template < class Type, class Alloc = FirstAlloc >
 class Vector {
 
 public:     // 【迭代器等内部类型定义】
     static const size_t default_capacity = 31ULL;   // 默认初始大小(已经演变成缩容的“下界”了。。。)
-    typedef Type        value_type;         // 
-    typedef Type*       pointer;            // 
-    typedef Type&       reference;          // 
+    typedef Type        value_type;
+    typedef Type*       pointer;
+    typedef Type&       reference;
     typedef size_t      size_type;          // 即 unsigned long long
     typedef ptrdiff_t   difference_type;    // 为 long long，表示两个迭代器间的距离
-    typedef Type* iterator;  // 【原生迭代器 —— 指针】
+    typedef Type*                   iterator;       // 【原生迭代器 —— 指针】
+    typedef Allocator<Type, Alloc>  data_allocator; // 【内存分配器】
     // 除上述以外，还应该有const_iterator, reverse_iterator, const_reference......
 
 protected:  // 【成员变量】
@@ -59,7 +61,7 @@ protected:  // 【成员变量】
     Type* _finish;              // 已初始地址的最后一个+1
     Type* _end_of_storage;      // 可用地址的最后一个+1
 
-            // 【扩/缩容】
+protected:  // 【扩/缩容】
     void _resize(size_t n) {
         // SGI STL vector<>此处逻辑：
         // (1)重新分配原来“两倍”的空间【STL vector<> 不会缩容...】
@@ -67,76 +69,91 @@ protected:  // 【成员变量】
         // (3)将原空间所有对象解构
         // (4)释放原空间
         // 实际上真没必要哇，直接一个realloc就够了
-        Type* new_start = Alloc::reallocate(_start, n);
+        Type* new_start = data_allocator::reallocate(_start, n);
         _end_of_storage = new_start + n;
-        _finish = new_start + size();  // 不加if(new_start != _start)，尽量不破坏流水线
+        _finish = new_start + size();  // 只有两句，不加if(new_start!=_start)，尽量不破坏流水线
         _start = new_start;
     }
 
 public:     // 【构造、析构函数】
     // 缺省构造，采用延迟构造(_start, ... = nullptr)
-    Vector(): _start(nullptr), 
-             _finish(nullptr), 
-             _end_of_storage(nullptr) {}
-    // 构造 [ value, value, value..., (n个元素) ] 这样的一个数组对象
-    // 若n=0则延迟构造(_start, ... = nullptr)，value默认为Type()
+    Vector(): 
+        _start(nullptr), _finish(nullptr), _end_of_storage(nullptr) {}
+
+    // 构造 [ value, value, value..., (n个元素) ]
+    // 默认value=Type()，若n=0则延迟构造(_start, ... = nullptr)
     Vector(size_t n, const Type& value = Type()): 
         _start(nullptr), _finish(nullptr), _end_of_storage(nullptr) {
         // 【注：STL vector<>带explicit防止隐式转换。这里没有n为int/long等类型的重载，不要explicit！】
         if (n != 0) {
-            _start = Alloc::allocate(n);
+            _start = data_allocator::allocate(n);
             _finish = _start;
             _end_of_storage = _start + n;
             while (_finish != _end_of_storage)  // mystl_construct(...)
                 new (_finish++) Type(value);
         }
-        // 【疑问：要是Type类没有缺省构造函数捏？】
-        // 【解答：那就唯有缺省构造，然后一个一个地添加了！STL vector<>的逻辑与这里也是等价的！！！
-        //   其实这样可以预防一些bug，比如Type类带指针、重载了=运算符(必然有free())、然后...】
+        // 【疑问：要是Type类没有缺省构造函数捏？虽然STL vector<>的构造函数也必须有Type()，不过如果是new捏？】
     }
+
     // 以[first, last)指针区域的内容构造一个数组对象
     // 若first>=last则延迟构造(_start, ... = nullptr)
     Vector(iterator first, iterator last): 
         _start(nullptr), _finish(nullptr), _end_of_storage(nullptr) {
         if (first < last) {
             size_t n = size_t(last - first);
-            _start = Alloc::allocate(n);
+            _start = data_allocator::allocate(n);
             _finish = _start;
             _end_of_storage = _start + n;
             while (first < last)
                 new (_finish++) Type(*first++);  // 无论*和++优先级如何，*first++结果都一样，这里优先级++高于*
         }
     }
+
     // 以字面量Vector<Type>({x, xx, xxx...})构造一个数组
     // 若init_list为空，会报错！！！
     Vector(initializer_list<Type> init_list) {
-        _start = Alloc::allocate(init_list.size());
+        _start = data_allocator::allocate(init_list.size());
         _finish = _start;
         _end_of_storage = _start + init_list.size();
         for (const auto& item : init_list) new (_finish++) Type(item);
         // cout << "construct: " << _start << endl;
     }
+
     // 析构并释放空间
     ~Vector() {
-        mystl_destroy(_start, _finish);     // 依次析构
-        Alloc::deallocate(_start);          // 释放空间
+        mystl_destroy(_start, _finish);         // 依次析构
+        data_allocator::deallocate(_start);     // 释放空间
         // cout << "destroy" << _start << endl;
     }
+
     // 拷贝构造函数，采用深拷贝【浅拷贝可以用memcpy代替】
-    Vector(const Vector<Type>& other):
-        _start(other._start), _finish(other._finish), _end_of_storage(other._end_of_storage) {
-        _start = Alloc::allocate(other.size());
-        _end_of_storage = _start + other.size();
-        _finish = _start;
-        for (const Type& item : other) 
-            new (_finish++) Type(item);
-        // cout << "copy construct: " << _start << endl;
+    Vector(const Vector<Type, Alloc>& other):
+        _start(nullptr), _finish(nullptr), _end_of_storage(nullptr) {
+        if (other._start == other._finish) {
+            _start = data_allocator::allocate(other.size());
+            _end_of_storage = _start + other.size();
+            _finish = _start;
+            for (const Type& item : other) 
+                new (_finish++) Type(item);
+            // cout << "copy construct: " << _start << endl;
+        }
     }
+    Vector(Vector<Type, Alloc>&& other):
+        _start(nullptr), _finish(nullptr), _end_of_storage(nullptr) {
+        if (other._start == other._finish) {
+            _start = data_allocator::allocate(other.size());
+            _end_of_storage = _start + other.size();
+            _finish = _start;
+            for (const Type& item : other) 
+                new (_finish++) Type(item);
+        }
+    }
+    
     // obj = other，采用深拷贝
-    Vector<Type>& operator=(const Vector<Type>& other) {
+    Vector<Type, Alloc>& operator=(const Vector<Type, Alloc>& other) {
         if (&other != this) {               // 确保不是“自己=自己” ←.←
-            if (!_start) this->~Vector();   // 如果不是*this不是缺省构造的，则应先解构、释放
-            _start = Alloc::allocate(other.size());
+            if (!_start) this->~Vector();   // 如果不是*this不是缺省构造的，则应先依次解构并释放空间
+            _start = data_allocator::allocate(other.size());
             _end_of_storage = _start + other.size();
             _finish = _start;
             for (const Type& item : other) 
@@ -146,29 +163,43 @@ public:     // 【构造、析构函数】
         return *this;
     }
 
-public:     // 【改、查】类定义中不超一行自动内联
-    // 已有的元素个数
-    size_t size()       const { return size_t(_finish - _start); }
-    // 总共可容纳的元素个数
-    size_t capacity()   const { return size_t(_end_of_storage - _start); }
-    // 是否为空
-    bool empty()        const { return _start == _finish; }
-    // 
+    // // 很少用：指定初始容量大小，而不进行对象初始化，外界看来size()=0
+    // // 若capacity=0则延迟构造(_start, ... = nullptr)
+    // static const Vector<Type, Alloc>& make_static_vector(size_t init_capacity) {
+    //     Vector<Type, Alloc> tmp;
+    //     if (init_capacity != 0) {
+    //         tmp._start = data_allocator::allocate(init_capacity);
+    //         tmp._finish = tmp._start;
+    //         tmp._end_of_storage = tmp._start + init_capacity;
+    //         // 将初始空间全部置0，这样即使越界访问，也能尽量避免free()产生的异常
+    //         // 也可以直接_start = calloc(...)代替
+    //         // memset(_start, 0, init_capacity*sizeof(Type));
+    //     }
+    //     return tmp;
+    // }
+
+public:     // 【Basic Accessor】类定义中不超一行自动内联
+    size_t size()       const { return size_t(_finish - _start); }          // 已有的元素个数
+    size_t capacity()   const { return size_t(_end_of_storage - _start); }  // 总共可容纳的元素个数
+    bool empty()        const { return _start == _finish; }                 // 是否为空
     iterator begin()    const { return _start; }            // 更标准的定义应该是const_iterator begin() const {...}
     iterator end()      const { return _finish; }           // 且应该重载多一个iterator begin() {...}
     iterator rbegin()   const { return _finish-1; }
     iterator rend()     const { return _start-1; }
-    Type& front()       const { return *_start; }           // 同理，原本应该是const_reference front() const {...}
-    Type& back()        const { return *(_finish-1); }      // 以及reference front() {...}
-    // 
+
+public:     // 【改、查】
+    Type& front() { return *_start; }
+    Type& back()  { return *(_finish-1); }
     Type& operator[](size_t i) { return *(_start+i); }
+    const Type& front() const { return *_start; }
+    const Type& back()  const { return *(_finish-1); }
     const Type& operator[](size_t i) const { return *(_start+i); }
     // 遍历查找与item相等的元素，返回第一个相等元素的指针
     iterator find(const Type& item) {
         for (Type* ptr=_start; ptr!=_finish; ++ptr)
             if (*ptr == item) 
                 return ptr;
-        return _finish; // 即end()，此时ptr==_finish，然鹅ptr已释放
+        return _finish; // 即end()，循环退出时ptr==_finish
     }
 
 public:     // 【增】
@@ -229,18 +260,20 @@ public:     // 【删】
     // 将position指针处的元素删除
     void erase(iterator position) { erase(position, position+1); }
 
-public:     // 【特殊：交换两个Vector<Type>，浅拷贝交换！】
-    void swap(Vector<Type>& other) {
+public:     // 【交换两个Vector<>，浅拷贝交换！】
+    void swap(Vector<Type, Alloc>& other) {
         if (&other == this) return;
-        Vector<Type> tmp[1]; memcpy(tmp, this, sizeof(Vector<Type>));
-        memcpy(this, &other, sizeof(Vector<Type>));
-        memcpy(&other, tmp, sizeof(Vector<Type>));
+        char tmp[sizeof(Vector<Type>)];             // 【注：这里不可直接Type tmp[1]，否则会自动解构tmp[1]！】
+        memcpy(tmp, this, sizeof(Vector<Type>));    // tmp = *this;
+        memcpy(this, &other, sizeof(Vector<Type>)); // *this = other;
+        memcpy(&other, tmp, sizeof(Vector<Type>));  // other = tmp;
         // Type* tmp_start=_start;     Type* tmp_finish=_finish;   Type* tmp_end=_end_of_storage;
         // _start=other._start;        _finish=other._finish;      _end_of_storage=other._end_of_storage;
         // other._start=tmp_start;     other._finish=tmp_finish;   other._end_of_storage=tmp_end;
     }
 };
 
+// 打印
 template <class Type>
 ostream& operator<<(ostream& out, const Vector<Type>& vec) {
     out << "[ ";
@@ -302,20 +335,20 @@ int main(int argc, char const *argv[]) {
         //     cout << endl;
         // }
         cout << "------------------" << endl;
-        arr2d.erase(&arr2d[1]);             // [[1,2,3,4], [11,12,13,14]]
-        arr2d.erase(&arr2d.back());         // [[1,2,3,4]]
-        cout << arr2d << endl;
+        arr2d.erase(&arr2d[1]);
+        arr2d.erase(&arr2d.back());
+        cout << arr2d << endl;                              // [[1,2,3,4]]
         cout << "------------------" << endl;
-        arr2d.insert(arr2d.begin(), {11, 12, 13, 14});      // [[11,12,13,14], [1,2,3,4]]
-        cout << arr2d << endl;
-        arr2d.insert(arr2d.begin(), {66, 66, 66, 66});      // [[66,66,66,66], [1,2,3,4], [1,2,3,4]]
-        cout << arr2d << endl;
+        arr2d.insert(arr2d.begin(), {11, 12, 13, 14});
+        cout << arr2d << endl;                              // [[11,12,13,14], [1,2,3,4]]
+        arr2d.insert(arr2d.begin(), {66, 66, 66, 66});
+        cout << arr2d << endl;                              // [[66,66,66,66], [11,12,13,14], [1,2,3,4]]
         arr2d.back().swap(arr2d.front());
-        cout << arr2d << endl;
+        cout << arr2d << endl;                              // [[1,2,3,4], [11,12,13,14], [66,66,66,66]]
         cout << "------------------" << endl;
-        for (int i=0; i<5; ++i) arr2d.push_back({99, 99});  // 后边加5个[99, 99]，触发_resize
-        cout << arr2d << endl;
-        cout << "------------------" << endl;
+        // for (int i=0; i<5; ++i) arr2d.push_back({99, 99});
+        // cout << arr2d << endl;                              // [[1,2,3,4], [11,12,13,14], [66,66,66,66], [99,99]*5]，触发_resize
+        // cout << "------------------" << endl;
     }
     // 性能测试
     {

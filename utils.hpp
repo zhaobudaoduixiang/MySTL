@@ -8,21 +8,35 @@
 using namespace std;
 
 
-// [STL swap]
+// [STL swap()]
 template <class Type>
 inline void mystl_swap(const Type& a, const Type& b) { Type tmp=a; a=b; b=tmp; }
-// same_type
+
+// [STL max()]
+template <class Type>
+inline const Type& mystl_max(const Type& a, const Type& b) { return b>a ? b : a; }
+template <class Type, class Compare>
+inline const Type& mystl_max(const Type& a, const Type& b, Compare comp) { return comp(b, a) ? b : a; }
+
+// [STL min()]
+template <class Type>
+inline const Type& mystl_min(const Type& a, const Type& b) { return b<a ? b : a; }
+template <class Type, class Compare>
+inline const Type& mystl_min(const Type& a, const Type& b, Compare comp) { return comp(b, a) ? b : a; }
+
+// []
 template <class T1, class T2>
 inline bool same_type(const T1& a, const T2& b) { return false; }
 template <class Type>
 inline bool same_type(const Type& a, const Type& b) { return true; }
 
-
-// functors
+// [STL greater<>]
 template <class Type> 
 struct Greater { 
     bool operator()(const Type& a, const Type& b) const { return a > b; }
 };
+
+// [STL less<>]
 template <class Type> 
 struct Less {
     bool operator()(const Type& a, const Type& b) const { return a < b; }

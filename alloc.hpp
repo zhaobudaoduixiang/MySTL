@@ -1,9 +1,24 @@
 /* alloc.hpp
  * 【内存分配器】
  * STL当中 <stl_construct.h> <stl_alloc.h> 部分内容的简化版
+ * 
+ * 一级内存分配器：
+ * 即malloc()/free()/realloc()，适用于大片连续空间的分配
+ * 
+ * 二级内存分配器：
+ * SGI STL的私房菜【GCC4.9开始被废弃...】，对链式数据结构的效率有极大提升！
+ * 因为 —— 每次::operator new/malloc()所得内存块都会有标记/冗余部分，以供系统回收/对齐，
+ * 而对于链式数据结构，其节点所占空间一致，因此这些标记部分都是多余的，二级内存分配器可让malloc()次数大幅减少！
+ * 原SGI STL的二级内存分配器适应STL标准后，现存于<ext/pool_allocator.h>，名为__gnu_cxx::__pool_alloc<>
+ * 
+ * 注意：
+ * 个人认为，原SGI STL将两级内存分配器通过simple_alloc<>接口“合二为一”，从而对外完全屏蔽的做法并不好！
+ * 由于二级内存分配器难以实现reallocate()，故simple_alloc<>只有allocate()和deallocate()，这样会大幅降低vector<>和priority_queue<>等的性能！
+ * 所以，这里我将二级内存分配器分开，Vector<>/PriorityQueue<>/Deque<>等默认使用一级内存分配器，SList<>/TreeMap<>等则默认使用二级内存分配器！
  */
 #ifndef __ALLOCATOR__
 #define __ALLOCATOR__
+#include <new>
 #include <cstdlib>      // malloc, realloc, free
 #include <cerrno>       // perror(print error)
 #include "traits.hpp"   // TypeTraits<>, IteratorTraits<>
@@ -52,22 +67,20 @@ inline void mystl_destroy(ForwardIterator first,
  */
 
 
-// """一级内存分配器FirstAlloc【适用于大片连续空间分配】"""
-// 具有 ::allocate() / ::deallocate() / ::reallocate() 功能
-// 基于 malloc() / realloc() / free()
-template <class Type>
+// """一级内存分配器FirstAlloc【适用于大片连续空间分配，如Vector<>等】"""
+// 具有 ::allocate()即malloc() / ::deallocate()即free() /::reallocate()即realloc()
 struct FirstAlloc {
-    // 分配nobj个Type类对象的空间(malloc)
-    static Type* allocate(size_t nobj = 1) {
-        Type* mem = (Type*)malloc(nobj * sizeof(Type));
+    // malloc()分配nbytes字节的空间
+    static void* allocate(size_t nbytes) {
+        void* mem = malloc(nbytes);
         if (!mem) { perror("out of memory!\n"); exit(1); }
         return mem;
     }
-    // 只是free(mem)
-    static void deallocate(Type* mem, size_t nobj = 1) { free(mem); }
-    // 基于mem，重新分配nobj个Type类对象的空间(realloc)
-    static Type* reallocate(Type* mem, size_t nobj) {               // _msize(ptr)运算符可知分配了多少内存给ptr
-        Type* new_mem = (Type*)realloc(mem, nobj*sizeof(Type));     // realloc自带拷贝和free！
+    // 即free(mem)
+    static void deallocate(void* mem) { free(mem); }
+    // realloc()为mem重新分配nbytes字节的空间
+    static void* reallocate(void* mem, size_t nbytes) {     // _msize(mem)可知分配了多少内存给mem
+        void* new_mem = realloc(mem, nbytes);               // realloc自带memcpy和free
         if (!new_mem) {
             perror("out of memory!\n");
             free(mem);  // realloc失败，mem未释放！
@@ -79,11 +92,9 @@ struct FirstAlloc {
 };
 
 
-// """二级内存分配器SecAlloc【适用于链式数据结构，比如链表、红黑树等】"""
-// 只具有 ::allocate() / ::deallocate()  功能
-// 基于 “内存池” 实现，内存池如下[STL __default_alloc_template]
-template <bool threads = false>  // 是否为多线程环境，默认为否，可重载偏特化
-class __MemoryPool {
+// """二级内存分配器SecondAlloc【适用于链式数据结构，如SList<>等】"""
+// 只具有 ::allocate() / ::deallocate()，基于 “内存池” 实现[STL __default_alloc_template]
+class SecondAlloc {
     // 一些常量
     static const size_t __align             = 8;    // 分配的内存大小为“8字节对齐”
     static const size_t __max_bytes         = 128;  // 二级分配器最多分配128字节，否则将自动调用malloc()/free()
@@ -96,6 +107,7 @@ class __MemoryPool {
         char any_data[1];
     };
 
+    // 内存池【原本还应考虑多线程情况，这里只是简单实现，就不搞这么多了。。。】
     static char* _start_free;   // 内存池起始位置，只在_chunk_alloc()中变化
     static char* _end_free;     // 内存池结束位置，只在_chunk_alloc()中变化
     static size_t _heap_size;   // ...
@@ -129,7 +141,7 @@ public:
     // 分配nbytes个字节的空间
     static void* allocate(size_t nbytes) {
         if (nbytes > __max_bytes)                   // 大于128字节，使用malloc()分配
-            return malloc(nbytes);
+            return FirstAlloc::allocate(nbytes);
         size_t i = _list_index(nbytes);             // 定位到对应内存链表，然后拨出内存块
         mem_block* cur_block = 
             _mem_lists[i]? _mem_lists[i]: _mlist_alloc(__align*(i+1));
@@ -140,7 +152,7 @@ public:
     // 释放mem所指空间，其大小为nbytes个字节
     static void deallocate(void* mem, size_t nbytes) {
         if (nbytes > __max_bytes)                   // 大于128字节，使用free()释放
-            return free(mem);
+            return FirstAlloc::deallocate(mem);
         size_t i = _list_index(nbytes);
         mem_block* next_block = _mem_lists[i];      // 以下即对应内存链表.push_front(mem)
         mem_block* cur_block = (mem_block*)mem;
@@ -149,21 +161,16 @@ public:
     }
 };
 
-// __MemoryPool静态成员变量的初始化
+// SecondAlloc静态成员变量的初始化
 // 正是因为这些静态成员，即要求不同类型的空间在同一个内存池分配，所以不能设置为<class Type>这样的模板类！
-template <bool threads>
-char* __MemoryPool<threads>::_start_free = nullptr;
-template <bool threads>
-char* __MemoryPool<threads>::_end_free = nullptr;
-template <bool threads>
-size_t __MemoryPool<threads>::_heap_size = 0;
-template <bool threads>
-typename __MemoryPool<threads>::mem_block* volatile __MemoryPool<threads>::
+char* SecondAlloc::_start_free  = nullptr;
+char* SecondAlloc::_end_free    = nullptr;
+size_t SecondAlloc::_heap_size  = 0;
+typename SecondAlloc::mem_block* volatile SecondAlloc::
 _mem_lists[__n_mem_lists] = {nullptr,0,0,0,  0,0,0,0,  0,0,0,0,  0,0,0,0};
 
 // 从内存池中分配nblocks个block_size字节的内存块所需的总内存
-template <bool threads>
-char* __MemoryPool<threads>::_chunk_alloc(size_t block_size, size_t& nblocks) {
+char* SecondAlloc::_chunk_alloc(size_t block_size, size_t& nblocks) {
     char* chunk;    // 返回的空间起始地址
     size_t alloc_bytes = block_size * nblocks;
     size_t pool_bytes = _end_free - _start_free;
@@ -196,25 +203,26 @@ char* __MemoryPool<threads>::_chunk_alloc(size_t block_size, size_t& nblocks) {
     return chunk;
 }
 
-// 二级内存分配器接口SecAlloc【只具有 ::allocate() / ::deallocate()  功能】
-template <class Type>
-struct SecAlloc {
-    // 分配 1 个 Type 类对象的空间
-    static Type* allocate() 
-        { return (Type*)__MemoryPool<>::allocate(sizeof(Type)); }
-    // 释放mem的空间，其大小为 1 个 Type 类对象所占空间
+
+// """内存分配器接口【可自行偏特化】"""
+// 默认为一级内存分配器
+template <class Type, class Alloc = FirstAlloc>
+struct Allocator {
+    static Type* allocate(size_t nobjs) 
+        { return (Type*)Alloc::allocate(nobjs*sizeof(Type)); }
     static void deallocate(Type* mem) 
-        { __MemoryPool<>::deallocate(mem, sizeof(Type)); }
-    // SecAlloc无法实现正常的reallocate(void*, size_t)，必须多一个接收size_t表示原空间大小，否则无法回收！
+        { Alloc::deallocate(mem); }
+    static Type* reallocate(Type* mem, size_t nobjs) 
+        { return (Type*)Alloc::reallocate(mem, nobjs*sizeof(Type)); }
 };
-/* 注意：
- * 原SGI STL的二级内存分配器适应STL标准后，现存于<ext/pool_allocator.h>
- * 使用时将std::allocator替换成__gnu_cxx::__pool_alloc<Type>即可
- * 不过，在大片内存管理上（比如vector和deque），std::allocator其实快很多！！！
- * 只是，对链式数据结构（比如list和map），二级内存分配器会让空间利用率更高 —— 
- * 因为每一次::operator new/malloc()所得内存块都会有标记部分，以供系统回收/对齐
- * 对于链式数据结构，其节点大小一致，因此这些标记部分都是多余的，二级内存分配器可让malloc()次数大幅减少！！！
- */
+// 二级内存分配器偏特化的Allocator
+template <class Type>
+struct Allocator<Type, SecondAlloc> {
+    static Type* allocate()
+        { return (Type*)SecondAlloc::allocate(sizeof(Type)); }
+    static void deallocate(Type* mem)
+        { SecondAlloc::deallocate(mem, sizeof(Type)); }
+};
 
 
 #endif  // __ALLOCATOR__

@@ -37,21 +37,22 @@ using namespace std;
 
 
 // """优先队列PriorityQueue [STL priority_queue<>] """
-template < class Type, class PriorityCompare = Greater<Type>, class Alloc = FirstAlloc<Type> >
+template < class Type, class PriorityCompare = Greater<Type>, class Alloc = FirstAlloc >
 class PriorityQueue {
 
 public:     // 【“优先队列”没有迭代器！！！】
     static const size_t default_capacity = 31ULL;   // 默认初始大小(已经演变成缩容的“下界”了。。。)
+    typedef Allocator<Type, Alloc> data_allocator;  // 【内存分配器】
 
 private:    // 【成员变量】
     Type* _start;           // 队首地址
     Type* _finish;          // 待入队位置
     Type* _end_of_storage;  // ...
-    PriorityCompare _prior; // 比较器，_prior(a, b)即 a优先级 > b优先级 ?
+    PriorityCompare _prior; // 比较器，_prior(a, b)即 a优先级 > b优先级
 
             // 【扩/缩容】
     void _resize(size_t n) {
-        Type* new_start = Alloc::reallocate(_start, n);
+        Type* new_start = data_allocator::reallocate(_start, n);
         _end_of_storage = new_start + n;
         _finish = new_start + size();   // size() = _finish - _start
         _start = new_start;
@@ -64,7 +65,7 @@ public:     // 【构造/析构函数】
     // 对字面量数组heapify
     PriorityQueue(initializer_list<Type> init_list) {
         size_t init_size = init_list.size() * 2;
-        _start = Alloc::allocate(init_size);
+        _start = data_allocator::allocate(init_size);
         _finish = _start;
         _end_of_storage = _start + init_size;
         for (const auto& item : init_list)
@@ -77,14 +78,14 @@ public:     // 【构造/析构函数】
     PriorityQueue(size_t capacity):
         _start(nullptr), _finish(nullptr), _end_of_storage(nullptr) {
         if (capacity > 0) {
-            _start = Alloc::allocate(capacity);
+            _start = data_allocator::allocate(capacity);
             _finish = _start;
             _end_of_storage = _start + capacity;
         }
     }
     ~PriorityQueue() {
         mystl_destroy(_start, _finish);
-        Alloc::deallocate(_start);
+        data_allocator::deallocate(_start);
     }
 
 public:     // 【查】
@@ -107,11 +108,12 @@ public:     // 【增】
         _shift_up(_finish-1 - _start);
     }
     private: void _shift_up(size_t index) {
-        Type tmp[1]; memcpy(tmp, _start+index, sizeof(Type));       // *tmp暂存刚入队那个
+        char tmp[sizeof(Type)];
+        memcpy(tmp, _start+index, sizeof(Type));    // *tmp用于暂存刚入队那个
         size_t parent_idx = (index-1) / 2;
-        while ( index > 0  &&  _prior(*tmp, _start[parent_idx]) ) { // *tmp优先级高于其父节点，还需上移
-            memcpy(_start+index, _start+parent_idx, sizeof(Type));  // 即_start[index] = _start[parent_idx]
-            index = parent_idx;                                     // 将父节点下移，等价于*tmp交换上移
+        while ( index > 0  &&  _prior(*(Type*)tmp, _start[parent_idx]) ) {     // *tmp优先级高于其父节点，还需上移
+            memcpy(_start+index, _start+parent_idx, sizeof(Type));      // 即_start[index] = _start[parent_idx]
+            index = parent_idx;                                         // 将父节点下移，等价于*tmp交换上移
             parent_idx = (index-1) / 2;
         }                                           // 循环退出后index==0或*tmp优先级不高于父亲节点了
         memcpy(_start+index, tmp, sizeof(Type));    // 此时index正是*tmp应该呆的地方（参考插入排序逻辑）
@@ -133,7 +135,8 @@ public:     // 【删】
         return tmp;
     }
     private: void _shift_down(size_t index) {
-        Type tmp[1]; memcpy(tmp, _start+index, sizeof(Type));           // *tmp暂存刚入队那个
+        char tmp[sizeof(Type)];
+        memcpy(tmp, _start+index, sizeof(Type));    // *tmp用于暂存刚入队那个
         size_t finish_idx = _finish - _start;
         size_t child_idx = index * 2 + 1;
         while (child_idx < finish_idx) {
@@ -141,7 +144,7 @@ public:     // 【删】
             if ( child_idx+1 < finish_idx  &&   
                 _prior(_start[child_idx+1], _start[child_idx]) ) ++child_idx;
             // 优先级较高的孩子比*tmp更优先？
-            if (_prior(_start[child_idx], *tmp)) {
+            if ( _prior(_start[child_idx], *(Type*)tmp) ) {
                 memcpy(_start+index, _start+child_idx, sizeof(Type));   // 即_start[index] = _start[child_idx]
                 index = child_idx;                                      // 孩子节点上移，等价于*tmp下移
                 child_idx = index * 2 + 1;
@@ -160,6 +163,8 @@ public:     // 【删】
 
 
 /* // 测试(OK)
+#include <ctime>
+#include <queue>
 int main(int argc, char const *argv[]) {
 
     {

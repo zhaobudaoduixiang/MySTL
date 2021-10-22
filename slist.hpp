@@ -68,7 +68,7 @@ struct __SListIterator {
 
 
 // """单链表SList[STL forward_list<>]"""
-template < class Type, class Alloc = SecAlloc<__SListNode<Type>> >
+template < class Type, class Alloc = SecondAlloc >
 class SList {
 
 public:     // 【内部类型定义】
@@ -77,8 +77,9 @@ public:     // 【内部类型定义】
     typedef Type&       reference;
     typedef size_t      size_type;
     typedef ptrdiff_t   difference_type;
-    typedef __SListIterator<Type>   iterator;  // 【迭代器】
     typedef __SListNode<Type>       _Node;
+    typedef __SListIterator<Type>   iterator;       // 【迭代器】
+    typedef Allocator<_Node, Alloc> node_allocator; // 【节点内存分配器】
 
 private:    // 【成员变量】
     _Node* _head;       // 头节点指针
@@ -95,30 +96,41 @@ public:     // 【构造/析构函数】
     }
     SList(const SList<Type, Alloc>& other): 
         _head(nullptr), _tail(nullptr), _count(0) {
-        for (const Type& item : other)
-            push_back(item);
+        if (!other.empty())
+            for (const Type& item : other)
+                push_back(item);
+    }
+    SList(SList<Type, Alloc>&& other):
+        _head(nullptr), _tail(nullptr), _count(0) {
+        if (!other.empty())
+            for (const Type& item : other)
+                push_back(item);
     }
     ~SList() { clear(); }
 
 public:     // 【构造/析构一个节点，因为不直接用new分配空间，只能放到这里】
-    static _Node* make_node(const Type& data, void* next) {
-        _Node* new_node = Alloc::allocate();
+    static _Node* make_node(const Type& data, _Node* next) {
+        _Node* new_node = node_allocator::allocate();
         new_node->data = data;
-        new_node->next = (_Node*)next;
+        new_node->next = next;
         return new_node;
     }
     static void destroy_node(_Node* node) {
-        (node->data).~Type();       // 析构*node所带data
-        Alloc::deallocate(node);    // 释放*node空间
+        (node->data).~Type();               // 析构*node所带data
+        node_allocator::deallocate(node);   // 释放*node空间
     }
 
-public:     // 【改、查】类定义中不超一行自动内联
-    size_t size()       const { return _count; }
-    bool empty()        const { return _count==0; }
-    iterator begin()    const { return iterator(_head); }
-    iterator end()      const { return iterator(); }
-    Type& front()       const { return _head->data; }
-    Type& back()        const { return _tail->data; }
+public:     // 【Basic Accessor】类定义中不超一行自动内联
+    size_t size()   const { return _count; }
+    bool empty()    const { return _count==0; }
+    iterator begin()const { return iterator(_head); }
+    iterator end()  const { return iterator(); }
+
+public:     // 【改、查】
+    Type& front() { return _head->data; }
+    Type& back()  { return _tail->data; }
+    const Type& front() const { return _head->data; }
+    const Type& back()  const { return _tail->data; }
     iterator find(const Type& value) {
         for (iterator cur=begin(); cur!=end(); ++cur)
             if (*cur == value) return cur;
@@ -180,6 +192,7 @@ public:     // 【删】
     }
 };
 
+// 打印
 template <class Type>
 ostream& operator<<(ostream& out, const SList<Type>& single_list) {
     for (const Type& item : single_list) out << item << " -> ";
@@ -194,6 +207,9 @@ ostream& operator<<(ostream& out, const SList<Type>& single_list) {
 
 
 /* // 测试(OK)
+#include <ctime>
+#include <vector>
+#include "vector.hpp"
 int main(int argc, char const *argv[]) {
 
     SList<int> tmp1({1, 2, 3, 4});
@@ -223,24 +239,24 @@ int main(int argc, char const *argv[]) {
     //     cout << et - st << " ms" << endl;
     // }
 
-    // {
-    //     clock_t st = clock();
-    //     SList<int> my_slist;
-    //     for (int i=0; i<int(1e6); ++i)
-    //         my_slist.push_front(i);
-    //     clock_t et = clock();
-    //     cout << my_slist.front() << ", " << my_slist.back() << ", " << my_slist.size() << endl;
-    //     cout << et - st << " ms" << endl;
-    // }
-    // {
-    //     clock_t st = clock();
-    //     Vector<int> my_vec;
-    //     for (int i=0; i<int(1e6); ++i)
-    //         my_vec.push_back(i);
-    //     clock_t et = clock();
-    //     cout << my_vec.front() << ", " << my_vec.back() << ", " << my_vec.size() << endl;
-    //     cout << et - st << " ms" << endl;
-    // }
+    {
+        clock_t st = clock();
+        SList<int> my_slist;
+        for (int i=0; i<int(1e6); ++i)
+            my_slist.push_front(i);
+        clock_t et = clock();
+        cout << my_slist.front() << ", " << my_slist.back() << ", " << my_slist.size() << endl;
+        cout << et - st << " ms" << endl;
+    }
+    {
+        clock_t st = clock();
+        Vector<int> my_vec;
+        for (int i=0; i<int(1e6); ++i)
+            my_vec.push_back(i);
+        clock_t et = clock();
+        cout << my_vec.front() << ", " << my_vec.back() << ", " << my_vec.size() << endl;
+        cout << et - st << " ms" << endl;
+    }
 
     system("pause");
     return 0;

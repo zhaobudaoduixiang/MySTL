@@ -32,18 +32,23 @@ public:
     Type pop()                  {return _self->pop_front();}
     // void swap(const& other);
 };
+
+
 template <class Type>
 class Stack< Type, Vector<Type> > {
 private:
     Vector<Type>* _self;
 public:
-    Stack(): _self(new Vector<Type>()) {}
+    Stack(): 
+        _self(new Vector<Type>()) {}
+    // Stack(size_t init_capacity): 
+    //     _self(new Vector<Type>(Vector<Type>::make_static_vector(init_capacity))) {}
     ~Stack() { delete _self; }
     bool size()     const {return _self->size();}
     bool empty()    const {return _self->empty();}
     Type& front()   const {return _self->front();}
     Type& back()    const {return _self->back();}
-    void push(const Type& item) {_self->push_back();}
+    void push(const Type& item) {_self->push_back(item);}
     Type pop()                  {return _self->pop_back();}
     // void swap(const& other);
 };
