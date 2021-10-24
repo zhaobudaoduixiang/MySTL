@@ -5,12 +5,7 @@
  * Vector<> 与 STL vector<> 不同之处：
  * (1)扩/缩容操作直接通过Alloc::reallocate()即realloc()完成
  * (2)insert()/erase()中，内部元素移动直接通过memmove()完成
- * 注意：仔细思考，这是可行的！！！即使Type类对象带着指向其它空间的指针！！！
- * 
- * SGI STL vector<>之所以不用realloc()且要频繁地构造/析构对象，我个人觉得是因为：
- * (1)为了对外屏蔽一、二级分配器的存在，强行将一、二级分配器统一，而二级分配器又难以实现::reallocate()
- * (2)过于强调代码重用性，即非要调用destroy()和uninitialized_fill()/_copy()等
- * 综上：我个人认为STL的做法是不必要，这样会造成效率低下！尤其是在vector<vector<...>>的情况下！
+ * 注意：仔细思考，这是可行的！！！即使Type类对象是复杂一点的，带着指向其它空间的指针！！！
  */
 
 /* 关于深/浅拷贝：
@@ -19,20 +14,20 @@
  * 综上，总之深拷贝就对了！
  * (1)像如下情况，编译器 “不会” 进行多余的深拷贝：
  * template<class Type>
- * Vector<Type>& generate_Vector() { Vector<Type> tmp; ...; return tmp; }
- * Vector<xx> vec = generate_Vector<xx>()
+ * Vector<Type> generate_vector() { Vector<Type> tmp; ...; return tmp; }
+ * Vector<xx> vec = generate_vector<xx>()
  * 将tmp构造好后，就直接将三个指针塞到vec了，而不会进行深拷贝构造！
  * (2)像如下情况，则会提示无法操作：
  * Vector<xx> vec;
- * vec = generate_Vector();
- * 此时generate_Vector()产生的是临时的右值引用，只能重载operater=(&&)进行深拷贝！
+ * vec = generate_vector();
+ * 此时generate_vector()产生的是临时的右值引用，只能重载operater=(&&)进行深拷贝！
  */
 
 #ifndef __VECTOR__
 #define __VECTOR__
 #include <iostream>         // cout, cerr, ostream... 以及 <new>/new, <cstring>/memmove, <cstdlib>/malloc, <windows.h>/system 等
 #include <initializer_list> // initializer_list<>
-#include <cstring>
+// #include <cstring>          // memset()
 #include "alloc.hpp"        // FirstAlloc<>
 #include "traits.hpp"       // TypeTraits<>
 using namespace std;
@@ -167,12 +162,13 @@ public:     // 【构造、析构函数】
 
     // 指定初始容量大小，而不进行对象初始化，外界看来size()=0
     // 若capacity=0则延迟构造(_start, ... = nullptr)
-    static Vector<Type, Alloc> make_static_vector(size_t init_capacity) {
+    static Vector<Type, Alloc> static_construct(size_t init_capacity) {
         Vector<Type, Alloc> tmp;
         if (init_capacity != 0) {
-            tmp._resize(init_capacity);
             // 将初始空间全部置0，这样即使越界访问，也能尽量避免free(未分配的空间)产生的异常
-            // 也可直接_start = calloc(...)代替
+            tmp._start = data_allocator::clear_allocate(init_capacity);
+            tmp._finish = tmp._start;
+            tmp._end_of_storage = tmp._start + init_capacity;
             // memset(_start, 0, init_capacity*sizeof(Type));
         }
         return tmp;

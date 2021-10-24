@@ -71,7 +71,7 @@ public:     // 【构造/析构函数】
         for (const auto& item : init_list)
             new (_finish++) Type(item);
         // heapify【从最后一个节点的父节点开始往前，就都可以看作一个子堆了，依次shift down】
-        for (size_t index=((_finish-1-_start)-1)/2 ; index>0; --index)
+        for (size_t index=((_finish-1-_start)-1)/2 ; index>=0; --index)
             _shift_down(index);
     }
     // 指定初始总容量

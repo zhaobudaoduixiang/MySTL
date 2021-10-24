@@ -38,7 +38,7 @@ public:
     Stack(): 
         _self(Vector<Type>()) {}
     Stack(size_t init_capacity):
-        _self(Vector<Type>::make_static_vector(init_capacity)) {}
+        _self(Vector<Type>::static_construct(init_capacity)) {}
     ~Stack() { /* 不需要析构函数，_self生存时间到了会自动析构 */ }
 public:
     size_t size() const { return _self.size(); }

@@ -25,8 +25,7 @@ struct __DequeIterator {
     Type*   cur;    // 当前数据的指针
     Type**  buf;    // 当前缓冲区(Type*)的指针
     // 构造函数
-    __DequeIterator(): 
-        cur(nullptr), buf(nullptr) {}
+    __DequeIterator(): cur(nullptr), buf(nullptr) {}
     // *self, ->self, self==other, self<other, self++, ++self, self-other, self+=n, self+n, self[] ...
     Type& operator*()   const { return *cur; }
     Type* operator->()  const { return cur; }
@@ -119,25 +118,24 @@ private:    // 【重新调整/分配map】
 public:     // 【构造/析构函数】
     Deque(): 
         _start(), _finish(), _map(nullptr), _map_size(0) {}
-    Deque(size_t n, const Type& value = Type()) {
+    Deque(initializer_list<Type> init_list) {
         // 分配中控器_map空间
-        size_t needed_buffers = n / buffer_size + 1;
-        _map_size = mystl::max(size_t(init_map_size), needed_buffers+2);    // static const 变量未初始化？？？
-        _map = map_allocator::allocate(_map_size);
+        size_t needed_buffers = init_list.size() / buffer_size + 1;
+        _map_size = mystl::max(size_t(init_map_size), needed_buffers+2);    // 前后各留一个缓冲区【static const 变量未初始化？！】
+        _map = map_allocator::clear_allocate(_map_size);                    // 一定全0初始化_map！！！
         // 分配各个所需缓冲区的空间
-        Type** first = _map + (_map_size-needed_buffers)/2;
-        Type** last = first + needed_buffers;
+        Type** first = _map + (_map_size - needed_buffers)/2;
+        Type** last  = first + needed_buffers;
         for (Type** cur=first; cur<last; ++cur)
             *cur = buffer_allocator::allocate(buffer_size);
-        // 填充各个缓冲区
+        // 填充
         _start.cur=*first;  _start.buf=first;
-        _finish.cur=*first; _finish.buf=first;
-        for (size_t i=0; i<n; ++i) { 
-            new (_finish.cur) Type(value); 
+        _finish = _start;
+        for (const auto& item : init_list) {
+            new (_finish.cur) Type(item);
             ++_finish;
         }
     }
-    Deque(initializer_list<Type> init_list) {}
     // Deque(Type* first, Type* last) {}
     // Deque(const Deque<Type, Alloc>& other) {}
     // Deque(Deque<Type, Alloc>&& other) {}

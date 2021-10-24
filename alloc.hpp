@@ -12,59 +12,58 @@
  * 原SGI STL的二级内存分配器适应STL标准后，现存于<ext/pool_allocator.h>，名为__gnu_cxx::__pool_alloc<>
  * 
  * 注意：
- * 个人认为，原SGI STL将两级内存分配器通过simple_alloc<>接口“合二为一”，从而对外完全屏蔽的做法并不好！
- * 由于二级内存分配器难以实现reallocate()，故simple_alloc<>只有allocate()和deallocate()，这样会大幅降低vector<>和priority_queue<>等的性能！
- * 所以，这里我将二级内存分配器分开，Vector<>/PriorityQueue<>/Deque<>等默认使用一级内存分配器，SList<>/TreeMap<>等则默认使用二级内存分配器！
+ * 个人认为，原SGI STL将两级内存分配器通过simple_alloc<>接口“合二为一”从而对外完全屏蔽的设计并不好！
+ * 由于二级内存分配器难以实现reallocate()，故simple_alloc<>只有allocate()和deallocate()，
+ * 这样会制约 vector<> priority_queue<> 等连续数据结构使用reallocate()，从而使之性能小幅降低
+ * 所以，我决定将二级内存分配器分开，Vector<> PriorityQueue<> Deque<> 等默认使用一级内存分配器，SList<> TreeMap<> 等则默认使用二级内存分配器！
  */
 #ifndef __ALLOCATOR__
 #define __ALLOCATOR__
-#include <new>
+#include <new>          // placement new
 #include <cstdlib>      // malloc, realloc, free
 #include <cerrno>       // perror(print error)
 #include "traits.hpp"   // TypeTraits<>, IteratorTraits<>
 
 
 namespace mystl {
-    // """在[first, last)区域内以value值构造对象[STL uninitialized_fill()]"""
-    // 似乎真没什么必要... uninitialized_fill_n()的源码在《STL源码剖析》的3.7
+    // """在[first, last)区域内以value值构造对象[3.7 STL uninitialized_fill()]"""
+    // 【有必要分是否为"Plain Old Data"类型吗？】
     template<class ForwardIterator, class Type>
     inline void __construct(ForwardIterator first, 
-                                ForwardIterator last, 
-                                const Type& value, TpFalse)   // 一般非POD类型
+                            ForwardIterator last, 
+                            const Type& value, TpFalse)   // 一般非POD类型
         { for(; first!=last; ++first) new (first) Type(value); }
     template<class ForwardIterator, class Type>
     inline void __construct(ForwardIterator first, 
-                                ForwardIterator last, 
-                                const Type& value, TpTrue)    // POD类型
+                            ForwardIterator last, 
+                            const Type& value, TpTrue)    // POD类型
         { for(; first!=last; ++first) *first=value; }
     template <class ForwardIterator, class Type>
     inline void construct(ForwardIterator first, 
-                                ForwardIterator last, 
-                                const Type& value)
+                          ForwardIterator last, 
+                          const Type& value)
         { __construct(first, last, value, 
-                            typename TypeTraits<typename IteratorTraits<ForwardIterator>::value_type>
-                            ::is_POD_type()); }
+                      typename TypeTraits<typename IteratorTraits<ForwardIterator>::value_type>::is_POD_type()); }
 
     // """解构[first, last)区域的全部对象[STL destroy()]"""
     template <class ForwardIterator, class Type>
     inline void __destroy(ForwardIterator first, 
-                                ForwardIterator last, TpTrue) {}    // 有trivial_destructor的类型
+                          ForwardIterator last, TpTrue) {}    // 有trivial_destructor的类型，什么都不干
     template <class ForwardIterator, class Type>
     inline void __destroy(ForwardIterator first, 
-                                ForwardIterator last, TpFalse)      // 无trivial_destructor的类型
-        { for(; first != last; ++first) first->~Type(); }
+                          ForwardIterator last, TpFalse)      // 无trivial_destructor的类型，依次析构
+        { for(; first != last; ++first) (*first).~Type(); }
     template <class ForwardIterator>
     inline void destroy(ForwardIterator first, 
-                            ForwardIterator last) {
-        __destroy<ForwardIterator, typename IteratorTraits<ForwardIterator>::value_type>(
-            first, last, 
-            typename TypeTraits<typename IteratorTraits<ForwardIterator>::value_type>
-            ::has_trivail_destructor()
-        );
+                        ForwardIterator last) {
+        typedef typename IteratorTraits<ForwardIterator>::value_type Type;
+        __destroy<ForwardIterator, Type>(first, last, typename TypeTraits<Type>::has_trivail_destructor());
     }
-/* SGI STL中惯用的inline void construct(T1*, const T2&)只是单纯的placement new，这里不进行包装
- * 单个的inline void destroy(T*)也只是单纯地调用析构函数，这里也不进行包装
- */
+    
+    /* inline void construct(T1*, const T2&)只是单纯的placement new
+     * inline void destroy(T*)也只是单纯地调用析构函数
+     * 上述二者在这里都不进行包装
+     */
 };
 
 
@@ -90,7 +89,13 @@ struct FirstAlloc {
         }
         return new_mem;
     }
-    // 其实也可calloc/_recalloc组合，只是_recalloc某些编译器不兼容...
+    // calloc()
+    static void* clear_allocate(size_t ele_num, size_t ele_size) {
+        void* mem = calloc(ele_num, ele_size);
+        if (!mem) { perror("out of memory!\n"); exit(1); }
+        return mem;
+    }
+    // 其实也可calloc()/_recalloc()组合，只是_recalloc()某些编译器不兼容...
 };
 
 
@@ -122,10 +127,10 @@ class SecondAlloc {
     static size_t _list_index(size_t nbytes)
         { return ( (nbytes + __align-1) / __align - 1 ); }
 
-    // 从内存池中分配内存，然后切分/串联为__n_blocks_per_list(20)个block_size字节的小内存块（内存链表）
+    // 从内存池分配内存填充内存链表，其内存块大小为block_size字节、内存块数为__n_blocks_per_list(20)，返回其头节点指针
     static mem_block* _mlist_alloc(size_t block_size) {
         size_t nblocks = __n_blocks_per_list;
-        char* chunk = _chunk_alloc(block_size, nblocks);    // nblocks存_chunk_alloc()分配得到区块个数，传引用！
+        char* chunk = _chunk_alloc(block_size, nblocks);    // nblocks是调用_chunk_alloc()分配得到区块个数，传引用！
         char* next_block = chunk + block_size;              // nblocks有可能不足__n_blocks_per_list(20)个！
         mem_block* cur_block = (mem_block*)chunk;
         for (size_t i=0; i<nblocks-1; ++i) {        // 将新分配的内存切分/串联到各个mem_block
@@ -144,9 +149,9 @@ public:
     static void* allocate(size_t nbytes) {
         if (nbytes > __max_bytes)                   // 大于128字节，使用malloc()分配
             return FirstAlloc::allocate(nbytes);
-        size_t i = _list_index(nbytes);             // 定位到对应内存链表，然后拨出内存块
+        size_t i = _list_index(nbytes);             // 即cur_block = 对应内存链表.pop_front()
         mem_block* cur_block = 
-            _mem_lists[i]? _mem_lists[i]: _mlist_alloc(__align*(i+1));
+            _mem_lists[i]? _mem_lists[i]: _mlist_alloc(__align*(i+1));  // 对应内存链表为空，则向内存池申请
         _mem_lists[i] = cur_block->next_block;
         // SGI STL写法：mem_block* volatile *mem_list_ptr = _mem_lists + _list_index(block_size);
         return (cur_block);
@@ -156,7 +161,7 @@ public:
         if (nbytes > __max_bytes)                   // 大于128字节，使用free()释放
             return FirstAlloc::deallocate(mem);
         size_t i = _list_index(nbytes);
-        mem_block* next_block = _mem_lists[i];      // 以下即对应内存链表.push_front(mem)
+        mem_block* next_block = _mem_lists[i];      // 即对应内存链表.push_front(mem)
         mem_block* cur_block = (mem_block*)mem;
         cur_block->next_block = next_block;
         _mem_lists[i] = cur_block;
@@ -216,6 +221,8 @@ struct Allocator {
         { Alloc::deallocate(mem); }
     static Type* reallocate(Type* mem, size_t nobjs) 
         { return (Type*)Alloc::reallocate(mem, nobjs*sizeof(Type)); }
+    static Type* clear_allocate(size_t nobjs)
+        { return (Type*)Alloc::clear_allocate(nobjs, sizeof(Type)); }
 };
 // 二级内存分配器偏特化的Allocator
 template <class Type>
