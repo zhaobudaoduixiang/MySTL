@@ -45,16 +45,16 @@ public:     // 【“优先队列”没有迭代器！！！】
     typedef Allocator<Type, Alloc> data_allocator;  // 【内存分配器】
 
 private:    // 【成员变量】
-    Type* _start;           // 队首地址
-    Type* _finish;          // 待入队位置
-    Type* _end_of_storage;  // ...
-    PrioritySuperior _prior;    // 比较器，_prior(a, b)即 a优先级 > b优先级
+    Type* _start;               // 优先队列的队首指针
+    Type* _finish;              // 优先队列的队尾后一个指针
+    Type* _end_of_storage;      // ...
+    PrioritySuperior _superior; // 比较器，_superior(a, b)即“a优先级 > b优先级”
 
-            // 【扩/缩容】
+private:    // 【扩/缩容】
     void _resize(size_t n) {
         Type* new_start = data_allocator::reallocate(_start, n);
         _end_of_storage = new_start + n;
-        _finish = new_start + size();   // size() = _finish - _start
+        _finish = new_start + size();
         _start = new_start;
     }
 
@@ -112,7 +112,7 @@ public:     // 【增】
         char tmp[sizeof(Type)];
         memcpy(tmp, _start+index, sizeof(Type));    // *tmp用于暂存刚入队那个
         size_t parent_idx = (index-1) / 2;
-        while ( index > 0  &&  _prior(*(Type*)tmp, _start[parent_idx]) ) {     // *tmp优先级高于其父节点，还需上移
+        while ( index > 0  &&  _superior(*(Type*)tmp, _start[parent_idx]) ) {     // *tmp优先级高于其父节点，还需上移
             memcpy(_start+index, _start+parent_idx, sizeof(Type));      // 即_start[index] = _start[parent_idx]
             index = parent_idx;                                         // 将父节点下移，等价于*tmp交换上移
             parent_idx = (index-1) / 2;
@@ -127,7 +127,7 @@ public:     // 【删】
             return Type();
         }
         if (size() < capacity()/4  &&  capacity()/2 > default_capacity) {
-            _resize(capacity() / 2);  // 延迟缩容：上一次pop()操作后，即使容量冗余也要拖到这次才缩容
+            _resize(capacity() / 2);                // 延迟缩容：上一次pop()操作后，即使容量冗余也要拖到这次才缩容
         }
         Type tmp(*_start);                          // 暂存堆顶元素，用于返回
         _start->~Type();
@@ -143,9 +143,9 @@ public:     // 【删】
         while (child_idx < finish_idx) {
             // 选出左右孩子中优先级较高的一个（的索引）
             if ( child_idx+1 < finish_idx  &&   
-                _prior(_start[child_idx+1], _start[child_idx]) ) ++child_idx;
+                _superior(_start[child_idx+1], _start[child_idx]) ) ++child_idx;
             // 优先级较高的孩子比*tmp更优先？
-            if ( _prior(_start[child_idx], *(Type*)tmp) ) {
+            if ( _superior(_start[child_idx], *(Type*)tmp) ) {
                 memcpy(_start+index, _start+child_idx, sizeof(Type));   // 即_start[index] = _start[child_idx]
                 index = child_idx;                                      // 孩子节点上移，等价于*tmp下移
                 child_idx = index * 2 + 1;
