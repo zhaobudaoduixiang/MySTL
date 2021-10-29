@@ -36,9 +36,9 @@ struct IteratorTraits {     // iterator_traits<>
     typedef typename Ite::reference         reference;
     typedef typename Ite::difference_type   difference_type;
 };
-// 泛型指针类型（偏特化）
+// 泛型指针类型（偏特化）【<const Type*>可实例化时自行调整！！！】
 template <class Type>
-struct IteratorTraits<Type*> {  // 还有<const Type*>?
+struct IteratorTraits<Type*> {
     typedef RandomIteratorTag   iterator_category;
     typedef Type                value_type;
     typedef Type*               pointer;
@@ -60,16 +60,16 @@ struct TypeTraits {     // __type_traits<...>
     typedef TpFalse has_trivail_destructor;             // ~Type()
     typedef TpFalse is_POD_type;                        // POD, plain old data
 };
-// 泛化指针类型（偏特化）
+// 泛化指针类型（偏特化）【<const Type*>可实例化时自行调整！！！】
 template <class Type>
-struct TypeTraits<Type*> {  // 还有<const Type*>?
+struct TypeTraits<Type*> {
     typedef TpTrue has_trivial_default_constructor;
     typedef TpTrue has_trivial_copy_constructor;
     typedef TpTrue has_trivial_assignment_operator;
     typedef TpTrue has_trivail_destructor;
     typedef TpTrue is_POD_type;
 };
-// 特化内置类型（偏特化）
+// 特化内置类型（偏特化）【<const xx>可实例化时自行调整！！！】
 template<> struct TypeTraits<char> {
     typedef TpTrue has_trivial_default_constructor;
     typedef TpTrue has_trivial_copy_constructor;

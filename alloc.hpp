@@ -89,8 +89,8 @@ struct FirstAlloc {
         }
         return new_mem;
     }
-    // calloc()
-    static void* clear_allocate(size_t ele_num, size_t ele_size) {
+    // 意为clear allocate，调用calloc()全0初始化
+    static void* clallocate(size_t ele_num, size_t ele_size) {
         void* mem = calloc(ele_num, ele_size);
         if (!mem) { perror("out of memory!\n"); exit(1); }
         return mem;
@@ -128,7 +128,7 @@ class SecondAlloc {
         { return ( (nbytes + __align-1) / __align - 1 ); }
 
     // 从内存池分配内存填充内存链表，其内存块大小为block_size字节、内存块数为__n_blocks_per_list(20)，返回其头节点指针
-    static mem_block* _mlist_alloc(size_t block_size) {
+    static mem_block* _refill_mlist(size_t block_size) {
         size_t nblocks = __n_blocks_per_list;
         char* chunk = _chunk_alloc(block_size, nblocks);    // nblocks是调用_chunk_alloc()分配得到区块个数，传引用！
         char* next_block = chunk + block_size;              // nblocks有可能不足__n_blocks_per_list(20)个！
@@ -151,7 +151,7 @@ public:
             return FirstAlloc::allocate(nbytes);
         size_t i = _list_index(nbytes);             // 即cur_block = 对应内存链表.pop_front()
         mem_block* cur_block = 
-            _mem_lists[i]? _mem_lists[i]: _mlist_alloc(__align*(i+1));  // 对应内存链表为空，则向内存池申请
+            _mem_lists[i]? _mem_lists[i]: _refill_mlist(__align*(i+1));  // 对应内存链表为空，则向内存池申请
         _mem_lists[i] = cur_block->next_block;
         // SGI STL写法：mem_block* volatile *mem_list_ptr = _mem_lists + _list_index(block_size);
         return (cur_block);
@@ -215,14 +215,18 @@ char* SecondAlloc::_chunk_alloc(size_t block_size, size_t& nblocks) {
 // 默认为一级内存分配器
 template <class Type, class Alloc = FirstAlloc>
 struct Allocator {
+    // 分配nobjs个Type类对象的空间
     static Type* allocate(size_t nobjs) 
         { return (Type*)Alloc::allocate(nobjs*sizeof(Type)); }
-    static void deallocate(Type* mem) 
+    // 释放mem所指空间
+    static void deallocate(Type* mem)
         { Alloc::deallocate(mem); }
-    static Type* reallocate(Type* mem, size_t nobjs) 
+    // 重新为mem分配nobjs个Type类对象的空间
+    static Type* reallocate(Type* mem, size_t nobjs)
         { return (Type*)Alloc::reallocate(mem, nobjs*sizeof(Type)); }
-    static Type* clear_allocate(size_t nobjs)
-        { return (Type*)Alloc::clear_allocate(nobjs, sizeof(Type)); }
+    // clear allocate，即分配nobjs个Type类对象的空间并全0初始化
+    static Type* clallocate(size_t nobjs)
+        { return (Type*)Alloc::clallocate(nobjs, sizeof(Type)); }
 };
 // 二级内存分配器偏特化的Allocator
 template <class Type>

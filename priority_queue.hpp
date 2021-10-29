@@ -8,7 +8,7 @@
  */
 
 /* 基于“最大二叉堆”实现的优先队列示意图
- * 【PriorityCompare = Less<Type>就变成最小堆了，可自定指定优先级比较函数子】
+ * 【PrioritySuperior = Less<Type>就变成最小堆了，可自定指定优先级比较函数子】
  * ////////////////////////////////////
  * //              62[0]             //
  * //             /     \            //
@@ -37,7 +37,7 @@ using namespace std;
 
 
 // """优先队列PriorityQueue [STL priority_queue<>] """
-template < class Type, class PriorityCompare = Greater<Type>, class Alloc = FirstAlloc >
+template < class Type, class PrioritySuperior = Greater<Type>, class Alloc = FirstAlloc >
 class PriorityQueue {
 
 public:     // 【“优先队列”没有迭代器！！！】
@@ -48,7 +48,7 @@ private:    // 【成员变量】
     Type* _start;           // 队首地址
     Type* _finish;          // 待入队位置
     Type* _end_of_storage;  // ...
-    PriorityCompare _prior; // 比较器，_prior(a, b)即 a优先级 > b优先级
+    PrioritySuperior _prior;    // 比较器，_prior(a, b)即 a优先级 > b优先级
 
             // 【扩/缩容】
     void _resize(size_t n) {
@@ -64,7 +64,7 @@ public:     // 【构造/析构函数】
         _start(nullptr), _finish(nullptr), _end_of_storage(nullptr) {}
     // 对字面量数组heapify
     PriorityQueue(initializer_list<Type> init_list) {
-        size_t init_size = init_list.size() * 2;
+        size_t init_size = init_list.size() * 2;  // 分配init_list两倍大小的空间
         _start = data_allocator::allocate(init_size);
         _finish = _start;
         _end_of_storage = _start + init_size;
@@ -92,9 +92,10 @@ public:     // 【查】
     size_t size()       const { return size_t(_finish - _start); }
     size_t capacity()   const { return size_t(_end_of_storage - _start); }
     bool empty()        const { return _start == _finish; }
-    const Type& top()   const { return *_start; }
+    const Type& top()   const { return *_start; }  // 不可修改
 
 public:     // 【改】
+    // 将堆顶修改为成new_top，然后_shift_down()维护堆性质【前K大/小】
     void replace(const Type& new_top) {
         *_start = new_top;
         _shift_down(0);
@@ -126,7 +127,7 @@ public:     // 【删】
             return Type();
         }
         if (size() < capacity()/4  &&  capacity()/2 > default_capacity) {
-            _resize(capacity() / 2);  // 延迟缩容，即：上一次_pop()操作后，即使容量冗余，也不会立即缩容
+            _resize(capacity() / 2);  // 延迟缩容：上一次pop()操作后，即使容量冗余也要拖到这次才缩容
         }
         Type tmp(*_start);                          // 暂存堆顶元素，用于返回
         _start->~Type();

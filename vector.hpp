@@ -27,7 +27,7 @@
 #define __VECTOR__
 #include <iostream>         // cout, cerr, ostream... 以及 <new>/new, <cstring>/memmove, <cstdlib>/malloc, <windows.h>/system 等
 #include <initializer_list> // initializer_list<>
-// #include <cstring>          // memset()
+#include <cstring>          // memset()
 #include "alloc.hpp"        // FirstAlloc<>
 #include "traits.hpp"       // TypeTraits<>
 using namespace std;
@@ -63,7 +63,7 @@ protected:  // 【扩/缩容】
         // (2)将原空间所有对象拷贝构造到新空间【uninitialized_copy()】
         // (3)将原空间所有对象解构
         // (4)释放原空间
-        // 实际上真没必要哇，直接一个realloc就够了
+        // 实际上realloc()足矣
         Type* new_start = data_allocator::reallocate(_start, n);
         _end_of_storage = new_start + n;
         _finish = new_start + size();  // 只有两句，不加if(new_start!=_start)，尽量不破坏流水线
@@ -123,40 +123,33 @@ public:     // 【构造、析构函数】
     }
 
     // 拷贝构造函数，采用深拷贝【浅拷贝可以用memcpy代替】
+    // Vector(Vector<Type, Alloc>&& other) {...} 的代码一毛一样，这里不重复了...
     Vector(const Vector<Type, Alloc>& other):
         _start(nullptr), _finish(nullptr), _end_of_storage(nullptr) {
+        // cout << "copy construct: " << _start << endl;
         if (other._start) {  // other不是缺省构造的
             _start = data_allocator::allocate(other.capacity());
             _end_of_storage = _start + other.capacity();
             _finish = _start;
             for (const Type& item : other) 
                 new (_finish++) Type(item);
-            // cout << "copy construct: " << _start << endl;
-        }
-    }
-    Vector(Vector<Type, Alloc>&& other):
-        _start(nullptr), _finish(nullptr), _end_of_storage(nullptr) {
-        if (other._start) {  // other不是缺省构造的
-            _start = data_allocator::allocate(other.capacity());
-            _end_of_storage = _start + other.capacity();
-            _finish = _start;
-            for (const Type& item : other) 
-                new (_finish++) Type(item);
-            // cout << "copy construct: " << _start << endl;
         }
     }
     
     // obj = other，采用深拷贝
+    // Vector<Type, Alloc>& operator=(Vector<Type, Alloc>&& other) {...} 的代码一毛一样！
     Vector<Type, Alloc>& operator=(const Vector<Type, Alloc>& other) {
-        if (&other != this) {               // 确保不是“自己=自己” ←.←
-            if (!_start) this->~Vector();   // 如果不是*this不是缺省构造的，则应先依次解构并释放空间
-            _start = data_allocator::allocate(other.size());
-            _end_of_storage = _start + other.size();
+        // cout << "op=() copy construct: " << _start << endl;
+        if (&other == this);        // 自己=自己：什么都不干
+        else if (other._start) {    // other是有东西的：深拷贝
+            if (_start != nullptr) this->~Vector();     // 若*this非缺省构造，则应先依次解构并释放空间
+            _start = data_allocator::allocate(other.capacity());
+            _end_of_storage = _start + other.capacity();
             _finish = _start;
-            for (const Type& item : other) 
-                new (_finish++) Type(item);
-            // cout << "op=() copy construct: " << _start << endl;
+            for (const Type& item : other) new (_finish++) Type(item);
         }
+        else                        // other是缺省构造的：自己全部指向nullptr即可
+            { memset(this, 0, sizeof(*this)); }
         return *this;
     }
 
@@ -166,10 +159,9 @@ public:     // 【构造、析构函数】
         Vector<Type, Alloc> tmp;
         if (init_capacity != 0) {
             // 将初始空间全部置0，这样即使越界访问，也能尽量避免free(未分配的空间)产生的异常
-            tmp._start = data_allocator::clear_allocate(init_capacity);
+            tmp._start = data_allocator::clallocate(init_capacity);
             tmp._finish = tmp._start;
             tmp._end_of_storage = tmp._start + init_capacity;
-            // memset(_start, 0, init_capacity*sizeof(Type));
         }
         return tmp;
     }
@@ -255,6 +247,11 @@ public:     // 【删】
     }
     // 将position指针处的元素删除
     void erase(iterator position) { erase(position, position+1); }
+    // 清空
+    void clear() {
+        mystl::destroy(_start, _finish);
+        _finish = _start;
+    }
 
 public:     // 【交换两个Vector<>，浅拷贝交换！】
     void swap(Vector<Type, Alloc>& other) {

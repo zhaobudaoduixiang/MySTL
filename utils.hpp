@@ -4,46 +4,140 @@
  */
 #ifndef __UTILITIES__
 #define __UTILITIES__
-#include <iostream>  // ostream
-
-
-namespace mystl {
-    // [STL swap()]
-    template <class Type>
-    inline void swap(const Type& a, const Type& b) { Type tmp=a; a=b; b=tmp; }
-
-    // [STL max()]
-    template <class Type>
-    inline const Type& max(const Type& a, const Type& b) { return b>a ? b : a; }
-    template <class Type, class Compare>
-    inline const Type& max(const Type& a, const Type& b, Compare comp) { return comp(b, a) ? b : a; }
-
-    // [STL min()]
-    template <class Type>
-    inline const Type& min(const Type& a, const Type& b) { return b<a ? b : a; }
-    template <class Type, class Compare>
-    inline const Type& min(const Type& a, const Type& b, Compare comp) { return comp(b, a) ? b : a; }
-
-    // []
-    template <class T1, class T2>
-    inline bool same_type(const T1& a, const T2& b) { return false; }
-    template <class Type>
-    inline bool same_type(const Type& a, const Type& b) { return true; }
-};
-
-
+#include <iostream> // ostream
+#include <cstring>  // strcmp
 using namespace std;
+
+
+// """HashCode —— 输入对象，返回unsigned long"""
+// 【无论什么编译器，unsigned long都足以覆盖全部指针地址】
+// 【注意：未偏特化的HashCode什么也不做！！！】
+template <class Type> 
+struct HashCode {};
+// HashCode<字符串>
+// 原本还应加上<const char*>的偏特化，不过这个通过实例化时自行调整！
+template<> struct HashCode<char*> {
+    unsigned long operator()(const char* key) const { 
+        unsigned long hash_code = 0;
+        for (; *key; ++key)  // 把字符串看作一个31进制的数
+            hash_code = hash_code * 31 + *key;
+        return hash_code;
+    }
+};
+template<> struct HashCode<string> {
+    unsigned long operator()(const string& key) const { 
+        unsigned long hash_code = 0;
+        for (const auto& tmp : key)
+            hash_code = hash_code * 31 + tmp;
+        return hash_code;
+    }
+};
+// HashCode<小于等于unsigned long的整型>
+template<> struct HashCode<char> {
+    unsigned long operator()(char key) const { return (unsigned long)key; }
+};
+template<> struct HashCode<signed char> {
+    unsigned long operator()(signed char key) const { return (unsigned long)key; }  
+};
+template<> struct HashCode<unsigned char> {
+    unsigned long operator()(unsigned char key) const { return (unsigned long)key; }  
+};
+template<> struct HashCode<short> {
+    unsigned long operator()(short key) const { return (unsigned long)key; }
+};
+template<> struct HashCode<unsigned short> {
+    unsigned long operator()(unsigned short key) const { return (unsigned long)key; }
+};
+template<> struct HashCode<int> {  // java中int固定32位，其哈希函数整体逻辑为(int_obj & 0x7fffffff) ^ ((unsigned)int_obj >> 16)
+    unsigned long operator()(int key) const { return (unsigned long)key; }
+};
+template<> struct HashCode<unsigned> {
+    unsigned long operator()(unsigned key) const { return (unsigned long)key; }
+};
+template<> struct HashCode<long> {
+    unsigned long operator()(long key) const { return (unsigned long)key; }
+};
+template<> struct HashCode<unsigned long> {
+    unsigned long operator()(unsigned long key) const { return (unsigned long)key; }
+};
+// HashCode<大于unsigned long的整型>
+template<> struct HashCode<long long> {
+    unsigned long operator()(long long key)         // 后32位 ^ 前32位
+        const { return (unsigned long)(key ^ ((unsigned long long)key>>32)); }
+};
+template<> struct HashCode<unsigned long long> {
+    unsigned long operator()(unsigned long long key)// 后32位 ^ 前32位
+        const { return key ^ (key>>32); }
+};
+// HashCode<浮点型>
+template<> struct HashCode<float> {
+    unsigned long operator()(float key)  // 无论编译器，int32_t始终与float位数相同
+        const { return (unsigned long) (*((int32_t*)&key)); }
+};
+template<> struct HashCode<double> {
+    unsigned long operator()(double key) // 无论编译器，int64_t始终与double位数相同
+        const { return (unsigned long) (*((int64_t*)&key)); }
+};
+// template<> struct HashCode<long double> {};  // TODO: 有待填坑..........
+
+
+// """Compare —— a==b返回0，a>b返回int>0，a<b返回int<0【参考java的obj.compare()】"""
+// Compare<未偏特化泛型> —— 判断两次，效率较差
+template <class Type>
+struct Compare {
+    int operator()(const Type& a, const Type& b) 
+        const { return a==b ? 0 : (a>b ? 1 : -1); }
+};
+// Compare<字符串> —— 使用strcmp
+template<> struct Compare<char*> {
+    int operator()(const char* a, const char* b) const { return strcmp(a, b); }
+};
+template<> struct Compare<string> {
+    int operator()(const string& a, const string& b) const { return strcmp(a.c_str(), b.c_str()); }
+};
+// Compare<小于等于int的整型> —— a-b即可
+template<> struct Compare<char> {
+    int operator()(char a, char b) const { return (int)(a-b); }
+};
+template<> struct Compare<signed char> {
+    int operator()(signed char a, signed char b) const { return (int)(a-b); }
+};
+template<> struct Compare<unsigned char> {
+    int operator()(unsigned char a, unsigned char b) const { return (int)(a-b); }
+};
+template<> struct Compare<short> {
+    int operator()(short a, short b) const { return (int)(a-b); }
+};
+template<> struct Compare<unsigned short> {
+    int operator()(unsigned short a, unsigned short b) const { return (int)(a-b); }
+};
+template<> struct Compare<int> {
+    int operator()(short a, short b) const { return (int)(a-b); }
+};
+template<> struct Compare<unsigned int> {
+    int operator()(unsigned int a, unsigned int b) const { return (int)(a-b); }
+};
+// Compare<大于int的整型> —— TODO: ..........
+// Compare<浮点型> —— TODO: ..........
+
+
 // [STL greater<>]
 template <class Type> 
 struct Greater { 
     bool operator()(const Type& a, const Type& b) const { return a > b; }
 };
-
+template<> struct Greater<char*> {
+    bool operator()(const char* a, const char* b) const { return strcmp(a, b) > 0; }
+};
 // [STL less<>]
 template <class Type> 
 struct Less {
     bool operator()(const Type& a, const Type& b) const { return a < b; }
 };
+template<> struct Less<char*> {
+    bool operator()(const char* a, const char* b) const { return strcmp(a, b) < 0; }
+};
+// [STL greater_equal<>, less_equal<>, equal<>...]
 
 
 // [STL pair<>]
@@ -68,5 +162,33 @@ template <class T1, class T2>
 ostream& operator<<(ostream& out, const Pair<T1, T2>& pr_obj) 
     { return out << "(" << pr_obj.first << ", " << pr_obj.second << ")"; }
 
+
+// 重名，以mtstl命名空间加以区分
+namespace mystl {
+    // [STL swap()]
+    template <class Type>
+    inline void swap(const Type& a, const Type& b) { Type tmp=a; a=b; b=tmp; }
+
+    // [STL max()]
+    template <class Type>
+    inline const Type& max(const Type& a, const Type& b) { return b>a ? b : a; }
+    template <class Type, class Compare>
+    inline const Type& max(const Type& a, const Type& b, Compare comp) { return comp(b, a) ? b : a; }
+
+    // [STL min()]
+    template <class Type>
+    inline const Type& min(const Type& a, const Type& b) { return b<a ? b : a; }
+    template <class Type, class Compare>
+    inline const Type& min(const Type& a, const Type& b, Compare comp) { return comp(b, a) ? b : a; }
+
+    // []
+    template <class T1, class T2>
+    inline bool same_type(const T1& a, const T2& b) { return false; }
+    template <class Type>
+    inline bool same_type(const Type& a, const Type& b) { return true; }
+
+    // []
+    int power(int base, int exponent);
+};
 
 #endif // __UTILITIES__
