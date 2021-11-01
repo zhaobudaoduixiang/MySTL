@@ -18,6 +18,7 @@ struct __DequeIterator {
     typedef Type                    value_type;
     typedef Type*                   pointer;
     typedef Type&                   reference;
+    typedef size_t                  size_type;
     typedef ptrdiff_t               difference_type;
     typedef __DequeIterator<Type, buf_size> iterator;
     // 成员变量
@@ -82,21 +83,16 @@ struct __DequeIterator {
     iterator operator+(difference_type n) const { return iterator(*this) += n; }
     iterator operator-(difference_type n) const { return iterator(*this) -= n; }
     // self[n]
-    Type& operator[](size_t n) 
-        { return *((this->operator+(n)).cur); }     // 可修改
-    const Type& operator[](size_t n) const  
-        { return *(this->operator+(n)); }           // 不可修改
+    Type& operator[](size_type n) 
+        { return *((this->operator+(n)).cur); } // 可修改
+    const Type& operator[](size_type n) const  
+        { return *(this->operator+(n)); }       // 不可修改
 };
 
 
 // """双端队列Deque"""
 template < class Type, class Alloc = FirstAlloc >
 class Deque {
-public:
-    // 每个缓冲区buffer的元素个数【每个缓冲区默认512字节】【跟Type挂钩，以static const声明】
-    static const size_t buffer_size = sizeof(Type)<512ULL ? 512ULL/sizeof(Type) : 1ULL;
-    // 中控器的默认长度
-    static const size_t default_map_size = 8ULL;   
 
 public:     // 【类型定义】
     typedef Type        value_type;
@@ -104,35 +100,39 @@ public:     // 【类型定义】
     typedef Type&       reference;
     typedef size_t      size_type;
     typedef ptrdiff_t   difference_type;
+    // 每个缓冲区buffer的元素个数【每个缓冲区默认512字节】【跟Type挂钩，以static const声明】
+    static const size_type buffer_size = sizeof(Type)<512ULL ? 512ULL/sizeof(Type) : 1ULL;
+    // 中控器的默认长度
+    static const size_type default_map_size = 8;
     typedef __DequeIterator<Type, buffer_size>  iterator;           // 【迭代器】
     typedef Allocator<Type, Alloc>              buffer_allocator;   // 【用于分配缓冲区的空间】
-    typedef Allocator<Type*, Alloc>             map_allocator;      // 【用于分配中控器的空间】 
+    typedef Allocator<Type*, Alloc>             map_allocator;      // 【用于分配中控器的空间】
 
 private:    // 【成员变量】
     iterator    _start;         // 第一个
     iterator    _finish;        // 最后一个的后一个
     Type**      _map_start;     // 中控器起始
-    size_t      _map_size;
+    size_type   _map_size;
 
 private:    // 【...】
     // 分配中控器的空间【全0初始化】
-    Type** _allocate_map(size_t mapsz)   { return map_allocator::clallocate(mapsz); }
+    Type** _allocate_map(size_type mapsz)   { return map_allocator::clallocate(mapsz); }
     // 释放中控器的空间
     void _deallocate_map(Type** mapp)    { map_allocator::deallocate(mapp); }
     // 分配一个缓冲区的空间
-    Type* _allocate_buffer(size_t bufsz) { return buffer_allocator::allocate(bufsz); }
+    Type* _allocate_buffer(size_type bufsz) { return buffer_allocator::allocate(bufsz); }
     // 释放bufp所指缓冲区的空间，并将bufp指向0
     void _deallocate_buffer(Type** bufp) { buffer_allocator::deallocate(*bufp); *bufp = nullptr; }
     // 重新分配中控器的空间【全0】，并调整居中
-    void _readjust_map(size_t add_buffers, bool add_front) {
-        size_t old_buffers = _finish.buf-_start.buf+1;
-        size_t need_buffers = old_buffers + add_buffers;
+    void _readjust_map(size_type add_buffers, bool add_front) {
+        size_type old_buffers = _finish.buf-_start.buf+1;
+        size_type need_buffers = old_buffers + add_buffers;
         Type** new_start_buf;
         // 中控器空间充足，直接居中即可
         if (_map_size >= 2*need_buffers) {
             new_start_buf = _map_start + (_map_size-need_buffers)/2;    // 居中时预留了add_buffers，而并未真正添加
             if (add_front) new_start_buf += add_buffers;                // 因此前端添加时要注意“恢复”start到未预留状态
-            size_t buf_offset = new_start_buf - _start.buf;                         // 缓冲区偏移量
+            size_type buf_offset = new_start_buf - _start.buf;                         // 缓冲区偏移量
             memmove(new_start_buf, _start.buf, old_buffers*sizeof(Type*));
             if (buf_offset < 0)  // 【置0！保持中控器上未分配的缓冲区必定指向nullptr！】
                 memset(new_start_buf+old_buffers, 0, (-buf_offset)*sizeof(Type*));  // 后端添加，前移
@@ -166,7 +166,7 @@ public:     // 【构造/析构函数】
     }
     Deque(initializer_list<Type> init_list) {
         // 分配中控器空间
-        size_t nbufs = init_list.size()/buffer_size+1;  // 所需缓冲区数，恰好整除时会+1
+        size_type nbufs = init_list.size()/buffer_size+1;  // 所需缓冲区数，恰好整除时会+1
         _map_size = nbufs + default_map_size;
         _map_start = _allocate_map(_map_size);          // 前后各留“默认缓冲区数的一半”
         // 分配所需缓冲区的空间
@@ -182,12 +182,12 @@ public:     // 【构造/析构函数】
     }
     // Deque(const Deque<Type, Alloc>& other) {}
     // Deque(Deque<Type, Alloc>&& other) {}
-    // Deque(size_t n, const Type& value) {}
+    // Deque(size_type n, const Type& value) {}
     // Deque(Type* first, Type* last) {}
     ~Deque() { clear(); _deallocate_map(_map_start); }
 
 public:     // 【Basic Accessor】
-    size_t size()   const { return _finish-_start; }
+    size_type size()const { return _finish-_start; }
     bool empty()    const { return _start==_finish; }
     iterator begin()const { return _start; }
     iterator end()  const { return _finish; }
@@ -195,10 +195,10 @@ public:     // 【Basic Accessor】
 public:     // 【改、查】
     Type& front() { return *(_start.cur); }
     Type& back()  { iterator tmp=_finish; --tmp; return *(tmp.cur); }
-    Type& operator[](size_t i) { return _start[i]; }
+    Type& operator[](size_type i) { return _start[i]; }
     const Type& front() const { return *_start; }
     const Type& back()  const { iterator tmp=_finish; --tmp; return *tmp; }
-    const Type& operator[](size_t i) const { return _start[i]; }
+    const Type& operator[](size_type i) const { return _start[i]; }
     iterator find(const Type& value) {
         for (iterator tmp=_start; tmp!=_finish; ++tmp)
             if (*tmp == value) return tmp;
@@ -236,7 +236,8 @@ public:     // 【增】
             new (_start.cur) Type(item);                            // 别忘记添加
         }
     }
-    void insert(size_t index, const Type& item);
+    // 在pos处插入item
+    // iterator insert(iterator pos, const Type& item);
 
 public:     // 【删】
     // 后端弹出
@@ -283,7 +284,8 @@ public:     // 【删】
         }
     }
     // 删除pos处元素
-    void erase(iterator pos);
+    // iterator erase(iterator pos);
+    // iterator erase(iterator first, iterator last);
     // 清空整个双端队列
     void clear() {
         mystl::destroy(_start, _finish);                // 析构（这个不是制约速度的关键）
@@ -311,7 +313,7 @@ public:     // 【删】
     //     _finish = _start;
     // }
 };
-
+// cout << deq;
 template <class Type>
 ostream& operator<<(ostream& out, const Deque<Type>& deq) {
     out << "[ ";

@@ -38,14 +38,14 @@ template < class Type, class Alloc = FirstAlloc >
 class Vector {
 
 public:     // 【迭代器等内部类型定义】
-    static const size_t default_capacity = 31ULL;   // 默认初始大小(已经演变成缩容的“下界”了。。。)
-    typedef Type        value_type;
-    typedef Type*       pointer;
-    typedef Type&       reference;
-    typedef size_t      size_type;          // 即 unsigned long long
-    typedef ptrdiff_t   difference_type;    // 为 long long，表示两个迭代器间的距离
-    typedef Type*                   iterator;       // 【原生迭代器 —— 指针】
-    typedef Allocator<Type, Alloc>  data_allocator; // 【内存分配器】
+    typedef Type                value_type;
+    typedef Type*               pointer;
+    typedef Type&               reference;
+    typedef size_t              size_type;          // 64位系统位unsigned long long，32位系统为unsigned long
+    typedef ptrdiff_t           difference_type;    // long long，表示两个迭代器间的距离
+    typedef Type*                   iterator;           // 【原生迭代器 —— 指针】
+    typedef Allocator<Type, Alloc>  data_allocator;     // 【内存分配器】
+    static const size_type default_capacity = 31;       // 可缩容的容量下界
     // 除上述以外，还应该有const_iterator, reverse_iterator, const_reference......
 
 protected:  // 【成员变量】
@@ -57,7 +57,7 @@ protected:  // 【成员变量】
     Type* _end_of_storage;      // 可用地址的最后一个+1
 
 protected:  // 【扩/缩容】
-    void _resize(size_t n) {
+    void _resize(size_type n) {
         // SGI STL vector<>此处逻辑：
         // (1)重新分配原来“两倍”的空间【STL vector<> 不会缩容...】
         // (2)将原空间所有对象拷贝构造到新空间【uninitialized_copy()】
@@ -77,7 +77,7 @@ public:     // 【构造、析构函数】
 
     // 构造 [ value, value, value..., (n个元素) ]
     // 默认value=Type()，若n=0则延迟构造(_start, ... = nullptr)
-    Vector(size_t n, const Type& value = Type()): 
+    Vector(size_type n, const Type& value = Type()): 
         _start(nullptr), _finish(nullptr), _end_of_storage(nullptr) {
         // 【注：STL vector<>带explicit防止隐式转换。这里没有n为int/long等类型的重载，不要explicit！】
         if (n != 0) {
@@ -95,7 +95,7 @@ public:     // 【构造、析构函数】
     Vector(iterator first, iterator last): 
         _start(nullptr), _finish(nullptr), _end_of_storage(nullptr) {
         if (first < last) {
-            size_t n = size_t(last - first);
+            size_type n = size_type(last - first);
             _start = data_allocator::allocate(n);
             _finish = _start;
             _end_of_storage = _start + n;
@@ -137,7 +137,7 @@ public:     // 【构造、析构函数】
     }
     
     // obj = other，采用深拷贝
-    // Vector<Type, Alloc>& operator=(Vector<Type, Alloc>&& other) {...} 的代码一毛一样！
+    // Vector<Type, Alloc>& operator=(Vector<Type, Alloc>&& other) {...} 也一毛一样！
     Vector<Type, Alloc>& operator=(const Vector<Type, Alloc>& other) {
         // cout << "op=() copy construct: " << _start << endl;
         if (&other == this);        // 自己=自己：什么都不干
@@ -155,7 +155,7 @@ public:     // 【构造、析构函数】
 
     // 指定初始容量大小，而不进行对象初始化，外界看来size()=0
     // 若capacity=0则延迟构造(_start, ... = nullptr)
-    static Vector<Type, Alloc> static_construct(size_t init_capacity) {
+    static Vector<Type, Alloc> static_construct(size_type init_capacity) {
         Vector<Type, Alloc> tmp;
         if (init_capacity != 0) {
             // 将初始空间全部置0，这样即使越界访问，也能尽量避免free(未分配的空间)产生的异常
@@ -167,26 +167,25 @@ public:     // 【构造、析构函数】
     }
 
 public:     // 【Basic Accessor】类定义中不超一行自动内联
-    size_t size()       const { return size_t(_finish - _start); }          // 已有的元素个数
-    size_t capacity()   const { return size_t(_end_of_storage - _start); }  // 总共可容纳的元素个数
-    bool empty()        const { return _start == _finish; }                 // 是否为空
-    iterator begin()    const { return _start; }            // 更标准的定义应该是const_iterator begin() const {...}
-    iterator end()      const { return _finish; }           // 且应该重载多一个iterator begin() {...}
+    size_type size()        const { return size_type(_finish - _start); }           // 已有的元素个数
+    size_type capacity()    const { return size_type(_end_of_storage - _start); }   // 总共可容纳的元素个数
+    bool empty()            const { return _start == _finish; }                     // 是否为空
+    iterator begin()    const { return _start; }    // 更标准的定义应该是const_iterator begin() const {...}
+    iterator end()      const { return _finish; }   // 且应该重载多一个iterator begin() {...}
     iterator rbegin()   const { return _finish-1; }
     iterator rend()     const { return _start-1; }
 
 public:     // 【改、查】
     Type& front() { return *_start; }
     Type& back()  { return *(_finish-1); }
-    Type& operator[](size_t i) { return *(_start+i); }
+    Type& operator[](size_type i) { return *(_start+i); }
     const Type& front() const { return *_start; }
     const Type& back()  const { return *(_finish-1); }
-    const Type& operator[](size_t i) const { return *(_start+i); }
+    const Type& operator[](size_type i) const { return *(_start+i); }
     // 遍历查找与item相等的元素，返回第一个相等元素的指针
     iterator find(const Type& item) {
         for (Type* ptr=_start; ptr!=_finish; ++ptr)
-            if (*ptr == item) 
-                return ptr;
+            if (*ptr == item) return ptr;
         return _finish; // 即end()，循环退出时ptr==_finish
     }
 
@@ -198,7 +197,7 @@ public:     // 【增】
         new (_finish++) Type(item);         // 【placement new】【在更高级的语言中 data[count++] = item 即可】
     }
     // 在position指针处插入n个值为value的元素
-    void insert(iterator position, size_t n, const Type& value) {
+    void insert(iterator position, size_type n, const Type& value) {
         if (position<_start || position>=_finish) {         // position越界
             cerr << "warning: position(" << position << ") is out of range!" << endl; 
             return; 
@@ -206,9 +205,9 @@ public:     // 【增】
         while (_finish+n > _end_of_storage)                 // 容量不足，扩容
             _resize(capacity()*2+1);
         memmove(position+n, position,                       // 从后向前，将[position, _finish)依次后移n格
-                sizeof(Type)*size_t(_finish-position));     // memmove(void* dst, void* src, size_t nbytes)，通过char*逐个字节拷贝可复现
+                sizeof(Type)*size_type(_finish-position));  // memmove(void* dst, void* src, size_type nbytes) char*
         _finish += n;
-        for (size_t i=0; i<n; ++i)                          // 从position开始依次以value值构造n个对象
+        for (size_type i=0; i<n; ++i)                       // 从position开始依次以value值构造n个对象
             new (position++) Type(value);
     }
     // 在position指针处插入元素item
@@ -239,7 +238,7 @@ public:     // 【删】
             return;
         }
         mystl::destroy(first, last);            // 对[first, last)的对象析构
-        const size_t n = size_t(last - first);
+        const size_type n = size_type(last - first);
         memmove(first, last, sizeof(Type)*n);   // 从前向后，将last开始后边剩余元素依次前移n格
         _finish -= n;
         while (size() < capacity()/4  &&  capacity()/2 > default_capacity)
@@ -256,17 +255,18 @@ public:     // 【删】
 public:     // 【交换两个Vector<>，浅拷贝交换！】
     void swap(Vector<Type, Alloc>& other) {
         if (&other == this) return;
-        char tmp[sizeof(Vector<Type>)];             // 【注：这里不可直接Type tmp[1]，否则会自动解构tmp[1]！】
-        memcpy(tmp, this, sizeof(Vector<Type>));    // tmp = *this;
-        memcpy(this, &other, sizeof(Vector<Type>)); // *this = other;
-        memcpy(&other, tmp, sizeof(Vector<Type>));  // other = tmp;
+        const size_t sz = sizeof(Vector<Type, Alloc>);
+        char tmp[sz];               // 【注：这里不可直接Type tmp[1]，否则会自动解构tmp[1]！】
+        memcpy(tmp, this, sz);      // tmp = *this;
+        memcpy(this, &other, sz);   // *this = other;
+        memcpy(&other, tmp, sz);    // other = tmp;
         // Type* tmp_start=_start;     Type* tmp_finish=_finish;   Type* tmp_end=_end_of_storage;
         // _start=other._start;        _finish=other._finish;      _end_of_storage=other._end_of_storage;
         // other._start=tmp_start;     other._finish=tmp_finish;   other._end_of_storage=tmp_end;
     }
 };
 
-// 打印
+// cout << vec;
 template <class Type>
 ostream& operator<<(ostream& out, const Vector<Type>& vec) {
     out << "[ ";

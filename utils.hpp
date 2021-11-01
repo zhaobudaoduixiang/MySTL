@@ -9,72 +9,72 @@
 using namespace std;
 
 
-// """HashCode —— 输入对象，返回unsigned long"""
-// 【无论什么编译器，unsigned long都足以覆盖全部指针地址】
+// """HashCode —— 输入对象，返回size_t"""
+// 【无论什么编译器，size_t都足以覆盖全部指针地址】
 // 【注意：未偏特化的HashCode什么也不做！！！】
 template <class Type> 
 struct HashCode {};
 // HashCode<字符串> —— 原本还应加上<const char*>的偏特化，不过这个可实例时自行调整模板
 template<> struct HashCode<char*> {
-    unsigned long operator()(const char* key) const { 
-        unsigned long hash_code = 0;
+    size_t operator()(const char* key) const { 
+        size_t hash_code = 0;
         for (; *key; ++key)  // 把字符串看作一个31进制的数
             hash_code = hash_code * 31 + *key;
         return hash_code;
     }
 };
 template<> struct HashCode<string> {
-    unsigned long operator()(const string& key) const { 
-        unsigned long hash_code = 0;
+    size_t operator()(const string& key) const { 
+        size_t hash_code = 0;
         for (const auto& tmp : key)
             hash_code = hash_code * 31 + tmp;
         return hash_code;
     }
 };
-// HashCode<小于等于unsigned long的整型> —— 返回自己即可
+// HashCode<小于等于size_t的整型> —— 返回自己即可
 template<> struct HashCode<char> {
-    unsigned long operator()(char key) const { return (unsigned long)key; }
+    size_t operator()(char key) const { return (size_t)key; }
 };
 template<> struct HashCode<signed char> {
-    unsigned long operator()(signed char key) const { return (unsigned long)key; }  
+    size_t operator()(signed char key) const { return (size_t)key; }  
 };
 template<> struct HashCode<unsigned char> {
-    unsigned long operator()(unsigned char key) const { return (unsigned long)key; }  
+    size_t operator()(unsigned char key) const { return (size_t)key; }  
 };
 template<> struct HashCode<short> {
-    unsigned long operator()(short key) const { return (unsigned long)key; }
+    size_t operator()(short key) const { return (size_t)key; }
 };
 template<> struct HashCode<unsigned short> {
-    unsigned long operator()(unsigned short key) const { return (unsigned long)key; }
+    size_t operator()(unsigned short key) const { return (size_t)key; }
 };
 template<> struct HashCode<int> {  // java中int固定32位，其哈希函数整体逻辑为(int_obj & 0x7fffffff) ^ ((unsigned)int_obj >> 16)
-    unsigned long operator()(int key) const { return (unsigned long)key; }
+    size_t operator()(int key) const { return (size_t)key; }
 };
 template<> struct HashCode<unsigned> {
-    unsigned long operator()(unsigned key) const { return (unsigned long)key; }
+    size_t operator()(unsigned key) const { return (size_t)key; }
 };
 template<> struct HashCode<long> {
-    unsigned long operator()(long key) const { return (unsigned long)key; }
+    size_t operator()(long key) const { return (size_t)key; }
 };
 template<> struct HashCode<unsigned long> {
-    unsigned long operator()(unsigned long key) const { return (unsigned long)key; }
+    size_t operator()(unsigned long key) const { return (size_t)key; }
 };
-// HashCode<大于等于unsigned long的整型>
+// HashCode<大于等于size_t的整型>
 template<> struct HashCode<long long> {
-    unsigned long operator()(long long key)         // 后32位 ^ 前32位
-        const { return (unsigned long)(key ^ ((unsigned long long)key>>32)); }
+    size_t operator()(long long key)         // 后32位 ^ 前32位
+        const { return (size_t)(key ^ ((unsigned long long)key>>32)); }
 };
 template<> struct HashCode<unsigned long long> {
-    unsigned long operator()(unsigned long long key)// 后32位 ^ 前32位
-        const { return key ^ (key>>32); }
+    size_t operator()(unsigned long long key)// 后32位 ^ 前32位
+        const { return (size_t)(key ^ (key>>32)); }
 };
 // HashCode<浮点型> —— 读作整数即可
 template<> struct HashCode<float> {
-    unsigned long operator()(float key)  // 无论编译器，uint32_t始终与float位数相同
-        const { return (unsigned long) (*((uint32_t*)&key)); }
+    size_t operator()(float key)  // 无论编译器，uint32_t始终与float位数相同
+        const { return (size_t)(*((uint32_t*)&key)); }
 };
 template<> struct HashCode<double> {
-    unsigned long operator()(double key) // 无论编译器，uint64_t始终与double位数相同
+    size_t operator()(double key) // 无论编译器，uint64_t始终与double位数相同
         const { return (*((uint64_t*)&key)) ^ (*((uint64_t*)&key)>>32); }
 };
 // template<> struct HashCode<long double> {};  // TODO: 有待填坑..........

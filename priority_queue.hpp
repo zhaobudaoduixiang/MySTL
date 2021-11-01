@@ -41,8 +41,12 @@ template < class Type, class PrioritySuperior = Greater<Type>, class Alloc = Fir
 class PriorityQueue {
 
 public:     // 【“优先队列”没有迭代器！！！】
-    static const size_t default_capacity = 31ULL;   // 默认初始大小(已经演变成缩容的“下界”了。。。)
-    typedef Allocator<Type, Alloc> data_allocator;  // 【内存分配器】
+    typedef Type                    value_type;
+    typedef Type*                   pointer;
+    typedef Type&                   reference;
+    typedef size_t                  size_type;
+    typedef Allocator<Type, Alloc>  data_allocator; // 【内存分配器】
+    static const size_type default_capacity = 31;   // 可缩容的容量下界
 
 private:    // 【成员变量】
     Type* _start;               // 优先队列的队首指针
@@ -51,7 +55,7 @@ private:    // 【成员变量】
     PrioritySuperior _superior; // 比较器，_superior(a, b)即“a优先级 > b优先级”
 
 private:    // 【扩/缩容】
-    void _resize(size_t n) {
+    void _resize(size_type n) {
         Type* new_start = data_allocator::reallocate(_start, n);
         _end_of_storage = new_start + n;
         _finish = new_start + size();
@@ -64,18 +68,18 @@ public:     // 【构造/析构函数】
         _start(nullptr), _finish(nullptr), _end_of_storage(nullptr) {}
     // 对字面量数组heapify
     PriorityQueue(initializer_list<Type> init_list) {
-        size_t init_size = init_list.size() * 2;  // 分配init_list两倍大小的空间
+        size_type init_size = init_list.size() * 2;  // 分配init_list两倍大小的空间
         _start = data_allocator::allocate(init_size);
         _finish = _start;
         _end_of_storage = _start + init_size;
         for (const auto& item : init_list)
             new (_finish++) Type(item);
         // heapify【从最后一个节点的父节点开始往前，就都可以看作一个子堆了，依次shift down】
-        for (size_t index=((_finish-1-_start)-1)/2 ; index>=0; --index)
+        for (size_type index=((_finish-1-_start)-1)/2 ; index>=0; --index)
             _shift_down(index);
     }
     // 指定初始总容量
-    PriorityQueue(size_t capacity):
+    PriorityQueue(size_type capacity):
         _start(nullptr), _finish(nullptr), _end_of_storage(nullptr) {
         if (capacity > 0) {
             _start = data_allocator::allocate(capacity);
@@ -89,10 +93,10 @@ public:     // 【构造/析构函数】
     }
 
 public:     // 【查】
-    size_t size()       const { return size_t(_finish - _start); }
-    size_t capacity()   const { return size_t(_end_of_storage - _start); }
-    bool empty()        const { return _start == _finish; }
-    const Type& top()   const { return *_start; }  // 不可修改
+    size_type size()     const { return size_type(_finish - _start); }
+    size_type capacity() const { return size_type(_end_of_storage - _start); }
+    bool empty()         const { return _start == _finish; }
+    const Type& top()    const { return *_start; }  // 不可修改
 
 public:     // 【改】
     // 将堆顶修改为成new_top，然后_shift_down()维护堆性质【前K大/小】
@@ -108,10 +112,10 @@ public:     // 【增】
         new (_finish++) Type(item);
         _shift_up(_finish-1 - _start);
     }
-    private: void _shift_up(size_t index) {
+    private: void _shift_up(size_type index) {
         char tmp[sizeof(Type)];
         memcpy(tmp, _start+index, sizeof(Type));    // *tmp用于暂存刚入队那个
-        size_t parent_idx = (index-1) / 2;
+        size_type parent_idx = (index-1) / 2;
         while ( index > 0  &&  _superior(*(Type*)tmp, _start[parent_idx]) ) {     // *tmp优先级高于其父节点，还需上移
             memcpy(_start+index, _start+parent_idx, sizeof(Type));      // 即_start[index] = _start[parent_idx]
             index = parent_idx;                                         // 将父节点下移，等价于*tmp交换上移
@@ -135,11 +139,11 @@ public:     // 【删】
         _shift_down(0);
         return tmp;
     }
-    private: void _shift_down(size_t index) {
+    private: void _shift_down(size_type index) {
         char tmp[sizeof(Type)];
         memcpy(tmp, _start+index, sizeof(Type));    // *tmp用于暂存刚入队那个
-        size_t finish_idx = _finish - _start;
-        size_t child_idx = index * 2 + 1;
+        size_type finish_idx = _finish - _start;
+        size_type child_idx = index * 2 + 1;
         while (child_idx < finish_idx) {
             // 选出左右孩子中优先级较高的一个（的索引）
             if ( child_idx+1 < finish_idx  &&   

@@ -39,43 +39,44 @@ template <class Key,
 class HashMap {
 
 public:     // 【类型定义】
-    // pointer, reference, size_type, difference_type...
-    typedef Pair<Key, Value>                value_type;
+    typedef Pair<Key, Value>    value_type;
+    typedef size_t              size_type;          // 64位编译器为unsigned long long，32位编译器为unsigned long
+    typedef ptrdiff_t           difference_type;    // 64位编译器为long long，32位编译器为long，表示两个迭代器间的距离
+    // pointer? reference?
     typedef __HashMapIterator<Key, Value>   iterator;
-    typedef __HashMapNode<Key, Value>       _Node;
-    typedef __HashMapTreeNode<Key, Value>   _TreeNode;
-    typedef Allocator<_Node*, TableAlloc>   table_allocator;
-    typedef Allocator<_Node, NodeAlloc>     node_allocator;
+    typedef __HashMapNode<Key, Value>       Node;
+    typedef __HashMapTreeNode<Key, Value>   TreeNode;
+    typedef Allocator<Node*, TableAlloc>    table_allocator;
+    typedef Allocator<Node, NodeAlloc>      node_allocator;
     typedef Allocator<bool, TableAlloc>     treetag_allocator;
-    typedef Allocator<_TreeNode, NodeAlloc> treenode_allocator;
-    typedef unsigned long                   ulong_t;
+    typedef Allocator<TreeNode, NodeAlloc>  treenode_allocator;
 
 private:    // 【成员变量】
-    static constexpr ulong_t __table_sizes[28] = { 53, 97, 193, 389, 769, 1543, 3079, 6151, 
-                                                12289, 24593, 49157, 98317, 196613, 393241, 
-                                                786433, 1572869, 3145739, 6291469, 12582917, 
-                                                25165843, 50331653, 100663319, 201326611, 
-                                                402653189, 805306457, 1610612741, 3221225473UL,
-                                                4294967291UL };
+    static constexpr size_type __table_sizes[28] = { 53, 97, 193, 389, 769, 1543, 3079, 6151, 
+                                                     12289, 24593, 49157, 98317, 196613, 393241, 
+                                                     786433, 1572869, 3145739, 6291469, 12582917, 
+                                                     25165843, 50331653, 100663319, 201326611, 
+                                                     402653189, 805306457, 1610612741, 3221225473UL,
+                                                     4294967291UL };  // 其实只到了uint_32的上限
     KeyCompare  _compare;
     KeyHasher   _hasher;
-    _Node**     _hash_table;
-    ulong_t     _table_size;
-    size_t      _size;
+    Node**      _hash_table;
+    size_type   _table_size;
+    size_type   _size;
     bool*       _istree;
 
 private:    // 【rehash】
-    ulong_t _next_tbsize() const {
-        for (const ulong_t* cur=__table_sizes; cur<__table_sizes+28; ++cur)
+    size_type _next_tbsize() const {
+        for (const size_type* cur=__table_sizes; cur<__table_sizes+28; ++cur)
             if (*cur == _table_size) return *(++cur);
-        return (ulong_t)0;
+        return (size_type)0;
     }
-    void _rehash(ulong_t tbsize) {;}
+    void _rehash(size_type tbsize) {;}
 
 public:     // 【构造/析构函数】
     HashMap(): 
         _hash_table(table_allocator::clallocate(__table_sizes[0])),
-        _table_size(__table_sizes[0]), _size(0ULL),
+        _table_size(__table_sizes[0]), _size(0),
         _istree(treetag_allocator::clallocate(__table_sizes[0])) {}
     ~HashMap() {
         clear();
@@ -83,10 +84,10 @@ public:     // 【构造/析构函数】
     }
 
 public:     // 【Basic Accessor】
-    size_t size() const { return _size; }
-    bool empty()  const { return _size==0; }
-    ulong_t hash(const Key& key) const 
-        { return (_hasher(key) & _table_size); }  // 充分利用局部性原理
+    size_type size() const { return _size; }
+    bool empty()     const { return _size==0; }
+    size_type hash(const Key& key) const            // 减少访问静态区的__table_sizes[]，
+        { return (_hasher(key) & _table_size); }    // 充分利用局部性原理
 
 public:     // 【增、改、查】
     void insert(const Key& key, const Value& value) {}
