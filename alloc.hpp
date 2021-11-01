@@ -14,8 +14,11 @@
  * 注意：
  * 个人认为，原SGI STL将两级内存分配器通过simple_alloc<>接口“合二为一”从而对外完全屏蔽的设计并不好！
  * 由于二级内存分配器难以实现reallocate()，故simple_alloc<>只有allocate()和deallocate()，
- * 这样会制约 vector<> priority_queue<> 等连续数据结构使用reallocate()，从而使之性能小幅降低
- * 所以，我决定将二级内存分配器分开，Vector<> PriorityQueue<> Deque<> 等默认使用一级内存分配器，SList<> TreeMap<> 等则默认使用二级内存分配器！
+ * 这样会制约 vector<> priority_queue<> 等连续数据结构使用reallocate()，从而使之性能降低
+ * 所以，这里将二级内存分配器分开，
+ * Vector<> PriorityQueue<> Deque<> 等连续空间数据结构默认使用一级内存分配器，
+ * SList<> TreeMap<> 等链式数据结构则默认使用二级内存分配器，
+ * HashMap<> 这种就两个都要！
  */
 #ifndef __ALLOCATOR__
 #define __ALLOCATOR__
@@ -23,11 +26,11 @@
 #include <cstdlib>      // malloc, realloc, free
 #include <cerrno>       // perror(print error)
 #include "traits.hpp"   // TypeTraits<>, IteratorTraits<>
-
-
 using namespace std;
+
+
 // """一级内存分配器FirstAlloc【适用于大片连续空间分配，如Vector<>等】"""
-// 具有 ::allocate()即malloc() / ::deallocate()即free() /::reallocate()即realloc()
+// 具有 ::allocate()即malloc() / ::deallocate()即free() /::reallocate()即realloc() / ::clallocate()即calloc()
 struct FirstAlloc {
     // malloc()分配nbytes字节的空间
     static void* allocate(size_t nbytes) {
@@ -88,14 +91,14 @@ class SecondAlloc {
     // 从内存池分配内存填充内存链表，其内存块大小为block_size字节、内存块数为__n_blocks_per_list(20)，返回其头节点指针
     static mem_block* _refill_mlist(size_t block_size) {
         size_t nblocks = __n_blocks_per_list;
-        char* chunk = _chunk_alloc(block_size, nblocks);    // nblocks是调用_chunk_alloc()分配得到区块个数，传引用！
+        char* chunk = _chunk_alloc(block_size, nblocks);    // nblocks是调用_chunk_alloc()分配得到区块个数，传引用，
         char* next_block = chunk + block_size;              // nblocks有可能不足__n_blocks_per_list(20)个！
         mem_block* cur_block = (mem_block*)chunk;
-        for (size_t i=0; i<nblocks-1; ++i) {        // 将新分配的内存切分/串联到各个mem_block
+        for (size_t i=0; i<nblocks-1; ++i) {        // 将新分配的内存切分、串联成一个内存链表
             cur_block->next_block = (mem_block*)next_block;
             cur_block = (mem_block*)next_block;
             next_block += block_size;
-        }   cur_block->next_block = nullptr;        // 循环结束后，cur_block来到最后一块新分配内存，封尾(nullptr)
+        }   cur_block->next_block = nullptr;        // 循环结束后，cur_block来到最后一块新分配内存，nullptr封尾
         // _mem_lists[_list_index(block_size)] = (mem_block*)chunk;
         return (mem_block*)chunk;
     }
@@ -144,7 +147,7 @@ char* SecondAlloc::_chunk_alloc(size_t block_size, size_t& nblocks) {
         _start_free += alloc_bytes;
     }
     else if (pool_bytes >= block_size) {    // 内存池剩余空间不完全满足需求，但可以提供一个以上区块
-        nblocks = pool_bytes / block_size;
+        nblocks = pool_bytes / block_size;  // （这里nblocks改变了！）
         chunk = _start_free;
         _start_free += block_size*nblocks;
     }
@@ -173,16 +176,16 @@ char* SecondAlloc::_chunk_alloc(size_t block_size, size_t& nblocks) {
 // 默认为一级内存分配器
 template <class Type, class Alloc = FirstAlloc>
 struct Allocator {
-    // 分配nobjs个Type类对象的空间
+    // 分配nobjs个Type类对象的空间【对应malloc()】
     static Type* allocate(size_t nobjs) 
         { return (Type*)Alloc::allocate(nobjs*sizeof(Type)); }
-    // 释放mem所指空间
+    // 释放mem所指空间【对应free()】
     static void deallocate(Type* mem)
         { Alloc::deallocate(mem); }
-    // 重新为mem分配nobjs个Type类对象的空间
+    // 重新为mem分配nobjs个Type类对象的空间【对应realloc()】
     static Type* reallocate(Type* mem, size_t nobjs)
         { return (Type*)Alloc::reallocate(mem, nobjs*sizeof(Type)); }
-    // clear allocate，即分配nobjs个Type类对象的空间并全0初始化
+    // clear allocate，即分配nobjs个Type类对象的空间并全0初始化【对应calloc()】
     static Type* clallocate(size_t nobjs)
         { return (Type*)Alloc::clallocate(nobjs, sizeof(Type)); }
 };
@@ -213,9 +216,10 @@ namespace mystl {
     template <class ForwardIterator, class Type>
     inline void construct(ForwardIterator first, 
                           ForwardIterator last, 
-                          const Type& value)
-        { __construct(first, last, value, 
-                      typename TypeTraits<typename IteratorTraits<ForwardIterator>::value_type>::is_POD_type()); }
+                          const Type& value) {
+        typedef typename IteratorTraits<ForwardIterator>::value_type ValueType;  // 极少数情况Type != ValueType
+        __construct(first, last, value, typename TypeTraits<ValueType>::is_POD_type()); 
+    }
 
     // """解构[first, last)区域的全部对象[STL destroy()]"""
     template <class ForwardIterator, class Type>

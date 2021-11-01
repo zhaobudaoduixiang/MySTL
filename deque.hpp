@@ -7,7 +7,6 @@
 #include <initializer_list>
 #include "alloc.hpp"    // ...
 #include "traits.hpp"   // ...
-#include "utils.hpp"    // ...
 using namespace std;
 
 
@@ -240,6 +239,7 @@ public:     // 【增】
     void insert(size_t index, const Type& item);
 
 public:     // 【删】
+    // 后端弹出
     Type pop_back() {
         if (empty()) { // 空情况
             cout << "warning: Deque(at " << this << ") is empty!" << endl; 
@@ -261,6 +261,7 @@ public:     // 【删】
             return tmp;
         }
     }
+    // 前端弹出
     Type pop_front() {
         if (empty()) { // 空情况
             cout << "warning: Deque(at " << this << ") is empty!" << endl; 
@@ -281,15 +282,34 @@ public:     // 【删】
             return tmp;
         }
     }
+    // 删除pos处元素
     void erase(iterator pos);
+    // 清空整个双端队列
     void clear() {
-        mystl::destroy(_start, _finish);                // 依次析构
-        for (Type** bufp=_start.buf+1; *bufp; ++bufp)   // 释放除_start.buf外的各缓冲区
-            _deallocate_buffer(bufp);                   // （至少留一个缓冲区）
-        _start.buf = _map_start + _map_size/2;          // 居中
+        mystl::destroy(_start, _finish);                // 析构（这个不是制约速度的关键）
+        for (Type** bufp=_start.buf+1; *bufp; ++bufp) 
+            _deallocate_buffer(bufp);                   // 除_start所在缓冲区，取余缓冲区全部释放
         _start.cur = _start.buf_start();
-        _finish = _start;                               // （中控器相关的不需改变）
+        _finish = _start;                               // ...
     }
+    // 没必要搞得这么复杂，其实速度差不多...
+    // void clear() {
+    //     if (_start.buf == _finish.buf) 
+    //         mystl::destroy(_start.cur, _finish.cur);
+    //     else {
+    //         mystl::destroy(_start.cur, _start.buf_finish());
+    //         for (Type** bufp=_start.buf+1; bufp<_finish.buf; ++bufp) {
+    //             mystl::destroy(*bufp, *bufp+buffer_size);
+    //             _deallocate_buffer(bufp);
+    //         }
+    //         mystl::destroy(_finish.buf_start(), _finish.cur);
+    //         _deallocate_buffer(_finish.buf);
+    //         if (*(_finish.buf+1))           // _finish.buf的下一个缓冲区因为延迟释放机制，还未释放
+    //             _deallocate_buffer(_finish.buf+1);
+    //     }
+    //     _start.cur = _start.buf_start();    // 只留下_start所在缓冲区
+    //     _finish = _start;
+    // }
 };
 
 template <class Type>
