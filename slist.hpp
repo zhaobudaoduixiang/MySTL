@@ -1,6 +1,6 @@
 /* slist.hpp
  * 【单向链表(slist, single list)】
- * STL当中 <stl_slist.h>/<slist>/新版<forward_list> 部分内容的简化版
+ * STL当中 <stl_slist.h>/<slist> 或 新版<forward_list> 部分内容的简化版
  * 
  * SList<> 与 STL slist<>/forward_list<> 的不同之处：
  * (1)除“头端插入/删除push_front()/pop_front()”外，也支持高效的尾端插入push_back()

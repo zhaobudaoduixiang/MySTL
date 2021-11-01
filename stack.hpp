@@ -15,14 +15,19 @@ using namespace std;
 
 template < class Type, class Seq = SList<Type> >
 class Stack {
+public:
+    typedef Type    value_type;
+    typedef Type*   pointer;
+    typedef Type&   reference;
+    typedef size_t  size_type;
 private:
     Seq _self;
 public:
     Stack(): _self(Seq()) {}
-    ~Stack() {}
+    // ~Stack() { /* 不需要析构函数，_self生存时间到了会自动析构 */ }
 public:
-    size_t size() const { return _self.size(); }
-    bool empty()  const { return _self.empty(); }
+    size_type size() const { return _self.size(); }
+    bool empty()     const { return _self.empty(); }
     Type& top()             { return _self.front(); }
     const Type& top() const { return _self.front(); }
     void push(const Type& item) { _self.push_front(item); }
@@ -39,7 +44,7 @@ public:
         _self(Vector<Type>()) {}
     Stack(size_t init_capacity):
         _self(Vector<Type>::static_construct(init_capacity)) {}
-    ~Stack() { /* 不需要析构函数，_self生存时间到了会自动析构 */ }
+    // ~Stack() { /* 不需要析构函数，_self生存时间到了会自动析构 */ }
 public:
     size_t size() const { return _self.size(); }
     bool empty()  const { return _self.empty(); }

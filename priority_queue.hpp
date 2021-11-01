@@ -63,9 +63,15 @@ private:    // 【扩/缩容】
     }
 
 public:     // 【构造/析构函数】
-    // 延迟构造
-    PriorityQueue(): 
-        _start(nullptr), _finish(nullptr), _end_of_storage(nullptr) {}
+    // 指定初始总容量
+    PriorityQueue(size_type init_capa = default_capacity):
+        _start(nullptr), _finish(nullptr), _end_of_storage(nullptr) {
+        if (init_capa > 0) {
+            _start = data_allocator::allocate(init_capa);
+            _finish = _start;
+            _end_of_storage = _start + init_capa;
+        }
+    }
     // 对字面量数组heapify
     PriorityQueue(initializer_list<Type> init_list) {
         size_type init_size = init_list.size() * 2;  // 分配init_list两倍大小的空间
@@ -77,15 +83,6 @@ public:     // 【构造/析构函数】
         // heapify【从最后一个节点的父节点开始往前，就都可以看作一个子堆了，依次shift down】
         for (size_type index=((_finish-1-_start)-1)/2 ; index>=0; --index)
             _shift_down(index);
-    }
-    // 指定初始总容量
-    PriorityQueue(size_type capacity):
-        _start(nullptr), _finish(nullptr), _end_of_storage(nullptr) {
-        if (capacity > 0) {
-            _start = data_allocator::allocate(capacity);
-            _finish = _start;
-            _end_of_storage = _start + capacity;
-        }
     }
     ~PriorityQueue() {
         mystl::destroy(_start, _finish);

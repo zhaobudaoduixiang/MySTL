@@ -1,5 +1,5 @@
 /* deque.hpp
- * 【双端队列】允许以O(1)时间在两端增/删，且支持随机访问[]
+ * 【双端队列】允许以O(1)时间在两端增/删，支持[]随机访问
  * STL当中 <stl_deque.h>/<deque> 部分内容的简化版
  */
 #ifndef __DEQUE__
@@ -24,8 +24,8 @@ struct __DequeIterator {
     // 成员变量
     Type*   cur;    // 当前数据的指针
     Type**  buf;    // 当前缓冲区(Type*)的指针
-    Type* buf_start()  const { return *buf; }
-    Type* buf_finish() const { return *buf+buf_size; }
+    Type* buf_start()  const { return *buf; }           // 缓冲区的第一个位置
+    Type* buf_finish() const { return *buf+buf_size; }  // 缓冲区最后一个位置+1
     // 构造函数
     __DequeIterator(): cur(nullptr), buf(nullptr) {}
     // *self, ->self
@@ -101,7 +101,7 @@ public:     // 【类型定义】
     typedef size_t      size_type;
     typedef ptrdiff_t   difference_type;
     // 每个缓冲区buffer的元素个数【每个缓冲区默认512字节】【跟Type挂钩，以static const声明】
-    static const size_type buffer_size = sizeof(Type)<512ULL ? 512ULL/sizeof(Type) : 1ULL;
+    static const size_type buffer_size = sizeof(Type)<512 ? 512/sizeof(Type) : 1;
     // 中控器的默认长度
     static const size_type default_map_size = 8;
     typedef __DequeIterator<Type, buffer_size>  iterator;           // 【迭代器】
@@ -109,10 +109,10 @@ public:     // 【类型定义】
     typedef Allocator<Type*, Alloc>             map_allocator;      // 【用于分配中控器的空间】
 
 private:    // 【成员变量】
-    iterator    _start;         // 第一个
-    iterator    _finish;        // 最后一个的后一个
+    iterator    _start;         // 第一个位置
+    iterator    _finish;        // 最后一个+1位置
     Type**      _map_start;     // 中控器起始
-    size_type   _map_size;
+    size_type   _map_size;      // 中控器长度
 
 private:    // 【...】
     // 分配中控器的空间【全0初始化】
@@ -132,9 +132,9 @@ private:    // 【...】
         if (_map_size >= 2*need_buffers) {
             new_start_buf = _map_start + (_map_size-need_buffers)/2;    // 居中时预留了add_buffers，而并未真正添加
             if (add_front) new_start_buf += add_buffers;                // 因此前端添加时要注意“恢复”start到未预留状态
-            size_type buf_offset = new_start_buf - _start.buf;                         // 缓冲区偏移量
+            size_type buf_offset = new_start_buf - _start.buf;                      // 缓冲区偏移量
             memmove(new_start_buf, _start.buf, old_buffers*sizeof(Type*));
-            if (buf_offset < 0)  // 【置0！保持中控器上未分配的缓冲区必定指向nullptr！】
+            if (buf_offset < 0)  // 【置0！保持中控器上未分配的缓冲区指向nullptr！】
                 memset(new_start_buf+old_buffers, 0, (-buf_offset)*sizeof(Type*));  // 后端添加，前移
             else
                 memset(_start.buf, 0, buf_offset*sizeof(Type*));                    // 前端添加，后移
@@ -160,15 +160,15 @@ public:     // 【构造/析构函数】
         _map_size = default_map_size;
         _map_start = _allocate_map(_map_size);
         _start.buf = _map_start + _map_size/2;
-        *(_start.buf) = _allocate_buffer(buffer_size);  // 至少留一个缓冲区
+        *(_start.buf) = _allocate_buffer(buffer_size);      // 至少留一个缓冲区
         _start.cur = _start.buf_start();
         _finish = _start;
     }
     Deque(initializer_list<Type> init_list) {
         // 分配中控器空间
-        size_type nbufs = init_list.size()/buffer_size+1;  // 所需缓冲区数，恰好整除时会+1
+        size_type nbufs = init_list.size()/buffer_size+1;   // 所需缓冲区数，恰好整除时会+1
         _map_size = nbufs + default_map_size;
-        _map_start = _allocate_map(_map_size);          // 前后各留“默认缓冲区数的一半”
+        _map_start = _allocate_map(_map_size);              // 前后各留“默认缓冲区数的一半”
         // 分配所需缓冲区的空间
         Type** first_buffer = _map_start + default_map_size/2;
         for (Type** bufp=first_buffer; bufp<first_buffer+nbufs; ++bufp)
@@ -183,7 +183,6 @@ public:     // 【构造/析构函数】
     // Deque(const Deque<Type, Alloc>& other) {}
     // Deque(Deque<Type, Alloc>&& other) {}
     // Deque(size_type n, const Type& value) {}
-    // Deque(Type* first, Type* last) {}
     ~Deque() { clear(); _deallocate_map(_map_start); }
 
 public:     // 【Basic Accessor】
@@ -195,9 +194,9 @@ public:     // 【Basic Accessor】
 public:     // 【改、查】
     Type& front() { return *(_start.cur); }
     Type& back()  { iterator tmp=_finish; --tmp; return *(tmp.cur); }
-    Type& operator[](size_type i) { return _start[i]; }
     const Type& front() const { return *_start; }
     const Type& back()  const { iterator tmp=_finish; --tmp; return *tmp; }
+    Type& operator[](size_type i) { return _start[i]; }
     const Type& operator[](size_type i) const { return _start[i]; }
     iterator find(const Type& value) {
         for (iterator tmp=_start; tmp!=_finish; ++tmp)

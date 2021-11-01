@@ -4,26 +4,31 @@
 #include "utils.hpp"
 using namespace std;
 
-// 宏：节点颜色、负载因子
+// 节点颜色
 #define RED     true
 #define BLACK   false
-#define UP_TOL  10ULL
-#define LOW_TOL 1ULL
 
 // ...
-template <class Key, class Value>
-struct __HashMapNode {
-    Key                         _key;   // 键
-    Value                       _val;   // 值
-    __HashMapNode<Key, Value>*  _right; // 这里即next，继承到TreeNode后即右孩子（父类指针可无条件指向派生类对象）
+template <class Key>
+struct __HashSetNode {
+    Key                 _key;
+    __HashSetNode<Key>* _right;  // 即next，继承到TreeNode后即右孩子（父类指针可无条件指向派生类对象）
+};
+
+// ...
+template <class Key>
+struct __HashSetTreeNode: __HashSetNode<Key> {
+    __HashSetTreeNode<Key>* _left;
+    bool                    _color;
 };
 
 // ...
 template <class Key, class Value>
-struct __HashMapTreeNode: __HashMapNode<Key, Value> {
-    __HashMapTreeNode<Key, Value>* _left;   // 左孩子
-    bool _color;                            // 颜色：红/黑
-};
+struct __HashMapNode: __HashSetNode<Key> { Value _value; };
+
+// ...
+template <class Key, class Value>
+struct __HashMapTreeNode: __HashSetTreeNode<Key> { Value _value; };
 
 // ...
 template <class Key, class Value>
@@ -52,18 +57,20 @@ public:     // 【类型定义】
     typedef Allocator<TreeNode, NodeAlloc>  treenode_allocator;
 
 private:    // 【成员变量】
+    static const size_type __up_tol = 10;   // 负载因子上限
+    static const size_type __low_tol = 1;   // 负载因子下限
     static constexpr size_type __table_sizes[28] = { 53, 97, 193, 389, 769, 1543, 3079, 6151, 
                                                      12289, 24593, 49157, 98317, 196613, 393241, 
                                                      786433, 1572869, 3145739, 6291469, 12582917, 
                                                      25165843, 50331653, 100663319, 201326611, 
                                                      402653189, 805306457, 1610612741, 3221225473UL,
-                                                     4294967291UL };  // 其实只到了uint_32的上限
-    KeyCompare  _compare;
-    KeyHasher   _hasher;
-    Node**      _hash_table;
-    size_type   _table_size;
-    size_type   _size;
-    bool*       _istree;
+                                                     4294967291UL };  // 哈希表长度【都是质数，用于取模散列】
+    KeyCompare  _compare;       // ...
+    KeyHasher   _hasher;        // ...
+    Node**      _hash_table;    // ...
+    size_type   _table_size;    // ...
+    size_type   _size;          // ...
+    bool*       _istree;        // ...
 
 private:    // 【rehash】
     size_type _next_tbsize() const {

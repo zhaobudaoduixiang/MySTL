@@ -205,13 +205,15 @@ public:     // 【增】
         while (_finish+n > _end_of_storage)                 // 容量不足，扩容
             _resize(capacity()*2+1);
         memmove(position+n, position,                       // 从后向前，将[position, _finish)依次后移n格
-                sizeof(Type)*size_type(_finish-position));  // memmove(void* dst, void* src, size_type nbytes) char*
+                sizeof(Type)*size_type(_finish-position));  // memmove(void* dst, void* src, size_type nbytes)
         _finish += n;
         for (size_type i=0; i<n; ++i)                       // 从position开始依次以value值构造n个对象
             new (position++) Type(value);
     }
     // 在position指针处插入元素item
-    void insert(iterator position, const Type& item) { insert(position, 1, item); }
+    void insert(iterator position, const Type& item) { 
+        insert(position, 1, item); 
+    }
 
 public:     // 【删】
     // 弹出末端元素
@@ -237,15 +239,17 @@ public:     // 【删】
             cerr << "[first, last) is out of range!" << endl;
             return;
         }
-        mystl::destroy(first, last);            // 对[first, last)的对象析构
+        mystl::destroy(first, last);                // 对[first, last)的对象析构
         const size_type n = size_type(last - first);
-        memmove(first, last, sizeof(Type)*n);   // 从前向后，将last开始后边剩余元素依次前移n格
+        memmove(first, last, sizeof(Type)*n);       // 从前向后，将last开始后边剩余元素依次前移n格
         _finish -= n;
         while (size() < capacity()/4  &&  capacity()/2 > default_capacity)
-            _resize(capacity()/2);              // 当n > capacity()/8时，会缩容两次或以上
+            _resize(capacity()/2);                  // 当n > capacity()/8时，会缩容两次或以上
     }
     // 将position指针处的元素删除
-    void erase(iterator position) { erase(position, position+1); }
+    void erase(iterator position) { 
+        erase(position, position+1); 
+    }
     // 清空
     void clear() {
         mystl::destroy(_start, _finish);
