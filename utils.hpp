@@ -14,8 +14,7 @@ using namespace std;
 // 【注意：未偏特化的HashCode什么也不做！！！】
 template <class Type> 
 struct HashCode {};
-// HashCode<字符串>
-// 原本还应加上<const char*>的偏特化，不过这个通过实例化时自行调整！
+// HashCode<字符串> —— 原本还应加上<const char*>的偏特化，不过这个可实例时自行调整模板
 template<> struct HashCode<char*> {
     unsigned long operator()(const char* key) const { 
         unsigned long hash_code = 0;
@@ -32,7 +31,7 @@ template<> struct HashCode<string> {
         return hash_code;
     }
 };
-// HashCode<小于等于unsigned long的整型>
+// HashCode<小于等于unsigned long的整型> —— 返回自己即可
 template<> struct HashCode<char> {
     unsigned long operator()(char key) const { return (unsigned long)key; }
 };
@@ -60,7 +59,7 @@ template<> struct HashCode<long> {
 template<> struct HashCode<unsigned long> {
     unsigned long operator()(unsigned long key) const { return (unsigned long)key; }
 };
-// HashCode<大于unsigned long的整型>
+// HashCode<大于等于unsigned long的整型>
 template<> struct HashCode<long long> {
     unsigned long operator()(long long key)         // 后32位 ^ 前32位
         const { return (unsigned long)(key ^ ((unsigned long long)key>>32)); }
@@ -69,14 +68,14 @@ template<> struct HashCode<unsigned long long> {
     unsigned long operator()(unsigned long long key)// 后32位 ^ 前32位
         const { return key ^ (key>>32); }
 };
-// HashCode<浮点型>
+// HashCode<浮点型> —— 读作整数即可
 template<> struct HashCode<float> {
-    unsigned long operator()(float key)  // 无论编译器，int32_t始终与float位数相同
-        const { return (unsigned long) (*((int32_t*)&key)); }
+    unsigned long operator()(float key)  // 无论编译器，uint32_t始终与float位数相同
+        const { return (unsigned long) (*((uint32_t*)&key)); }
 };
 template<> struct HashCode<double> {
-    unsigned long operator()(double key) // 无论编译器，int64_t始终与double位数相同
-        const { return (unsigned long) (*((int64_t*)&key)); }
+    unsigned long operator()(double key) // 无论编译器，uint64_t始终与double位数相同
+        const { return (*((uint64_t*)&key)) ^ (*((uint64_t*)&key)>>32); }
 };
 // template<> struct HashCode<long double> {};  // TODO: 有待填坑..........
 
@@ -148,22 +147,48 @@ struct Pair {
     Pair(): first(T1()), second(T2()) {}
     Pair(const T1& _first, const T2& _second):
         first(_first), second(_second) {}
-    // bool operator>(const Pair<T1, T2>& other) {
-    //     if (first > other.first) return true;
-    //     else if (first < other.first) return false;
-    //     else {
-    //         if (second > other.second) return true;
-    //         else if (second < other.second) return false;
-    //         else return (this > &other);
-    //     }
-    // }
+    bool operator==(const Pair<T1, T2>& other) const { 
+        return first==other.first && second==other.second; 
+    }
+    bool operator!=(const Pair<T1, T2>& other) const { 
+        return first!=other.first || second!=other.second; 
+    }
+    bool operator>(const Pair<T1, T2>& other) const {
+        if (first > other.first) return true;
+        else if (first < other.first) return false;
+        else {
+            if (second > other.second) return true;
+            else return false;
+        }
+    }
+    bool operator<(const Pair<T1, T2>& other) const {
+        if (first < other.first) return true;
+        else if (first > other.first) return false;
+        else {
+            if (second < other.second) return true;
+            else return false;
+        }
+    }
+};
+template<class T1, class T2>
+struct Compare<Pair<T1, T2>> {
+    int operator()(const Pair<T1, T2>& a, const Pair<T1, T2>& b) const {
+        if (a.first==b.first && a.second==b.second)
+            return 0;
+        else {
+            if (a.first > b.first) return 1;
+            else if (a.first < b.first) return -1;
+            else if (a.second > b.second) return 1;
+            else return -1;
+        }
+    }
 };
 template <class T1, class T2>
 ostream& operator<<(ostream& out, const Pair<T1, T2>& pr_obj) 
     { return out << "(" << pr_obj.first << ", " << pr_obj.second << ")"; }
 
 
-// 重名，以mtstl命名空间加以区分
+// 重名，以mystl命名空间加以区分
 namespace mystl {
     // [STL swap()]
     template <class Type>
@@ -190,5 +215,6 @@ namespace mystl {
     // []
     int power(int base, int exponent);
 };
+
 
 #endif // __UTILITIES__

@@ -25,48 +25,6 @@
 #include "traits.hpp"   // TypeTraits<>, IteratorTraits<>
 
 
-namespace mystl {
-    // """在[first, last)区域内以value值构造对象[3.7 STL uninitialized_fill()]"""
-    // 【有必要分是否为"Plain Old Data"类型吗？】
-    template<class ForwardIterator, class Type>
-    inline void __construct(ForwardIterator first, 
-                            ForwardIterator last, 
-                            const Type& value, TpFalse)   // 一般非POD类型
-        { for(; first!=last; ++first) new (first) Type(value); }
-    template<class ForwardIterator, class Type>
-    inline void __construct(ForwardIterator first, 
-                            ForwardIterator last, 
-                            const Type& value, TpTrue)    // POD类型
-        { for(; first!=last; ++first) *first=value; }
-    template <class ForwardIterator, class Type>
-    inline void construct(ForwardIterator first, 
-                          ForwardIterator last, 
-                          const Type& value)
-        { __construct(first, last, value, 
-                      typename TypeTraits<typename IteratorTraits<ForwardIterator>::value_type>::is_POD_type()); }
-
-    // """解构[first, last)区域的全部对象[STL destroy()]"""
-    template <class ForwardIterator, class Type>
-    inline void __destroy(ForwardIterator first, 
-                          ForwardIterator last, TpTrue) {}    // 有trivial_destructor的类型，什么都不干
-    template <class ForwardIterator, class Type>
-    inline void __destroy(ForwardIterator first, 
-                          ForwardIterator last, TpFalse)      // 无trivial_destructor的类型，依次析构
-        { for(; first != last; ++first) (*first).~Type(); }
-    template <class ForwardIterator>
-    inline void destroy(ForwardIterator first, 
-                        ForwardIterator last) {
-        typedef typename IteratorTraits<ForwardIterator>::value_type Type;
-        __destroy<ForwardIterator, Type>(first, last, typename TypeTraits<Type>::has_trivail_destructor());
-    }
-    
-    /* inline void construct(T1*, const T2&)只是单纯的placement new
-     * inline void destroy(T*)也只是单纯地调用析构函数
-     * 上述二者在这里都不进行包装
-     */
-};
-
-
 using namespace std;
 // """一级内存分配器FirstAlloc【适用于大片连续空间分配，如Vector<>等】"""
 // 具有 ::allocate()即malloc() / ::deallocate()即free() /::reallocate()即realloc()
@@ -85,7 +43,7 @@ struct FirstAlloc {
         if (!new_mem) {
             perror("out of memory!\n");
             free(mem);  // realloc失败，mem未释放！
-            exit(1);    // 也可exit(EXIT_FAILURE)
+            exit(1);    // 即exit(EXIT_FAILURE)
         }
         return new_mem;
     }
@@ -237,5 +195,47 @@ struct Allocator<Type, SecondAlloc> {
         { SecondAlloc::deallocate(mem, sizeof(Type)); }
 };
 
+
+// 重名，以mystl命名空间加以区分
+namespace mystl {
+    // """在[first, last)区域内以value值构造对象[3.7 STL uninitialized_fill()]"""
+    // 【有必要分是否为"Plain Old Data"类型吗？】
+    template<class ForwardIterator, class Type>
+    inline void __construct(ForwardIterator first, 
+                            ForwardIterator last, 
+                            const Type& value, TpFalse)   // 一般非POD类型
+        { for(; first!=last; ++first) new (first) Type(value); }
+    template<class ForwardIterator, class Type>
+    inline void __construct(ForwardIterator first, 
+                            ForwardIterator last, 
+                            const Type& value, TpTrue)    // POD类型
+        { for(; first!=last; ++first) *first=value; }
+    template <class ForwardIterator, class Type>
+    inline void construct(ForwardIterator first, 
+                          ForwardIterator last, 
+                          const Type& value)
+        { __construct(first, last, value, 
+                      typename TypeTraits<typename IteratorTraits<ForwardIterator>::value_type>::is_POD_type()); }
+
+    // """解构[first, last)区域的全部对象[STL destroy()]"""
+    template <class ForwardIterator, class Type>
+    inline void __destroy(ForwardIterator first, 
+                          ForwardIterator last, TpTrue) {}    // 有trivial_destructor的类型，什么都不干
+    template <class ForwardIterator, class Type>
+    inline void __destroy(ForwardIterator first, 
+                          ForwardIterator last, TpFalse)      // 无trivial_destructor的类型，依次析构
+        { for(; first != last; ++first) (*first).~Type(); }
+    template <class ForwardIterator>
+    inline void destroy(ForwardIterator first, 
+                        ForwardIterator last) {
+        typedef typename IteratorTraits<ForwardIterator>::value_type Type;
+        __destroy<ForwardIterator, Type>(first, last, typename TypeTraits<Type>::has_trivail_destructor());
+    }
+    
+    /* inline void construct(T1*, const T2&)只是单纯的placement new
+     * inline void destroy(T*)也只是单纯地调用析构函数
+     * 上述二者在这里都不进行包装
+     */
+};
 
 #endif  // __ALLOCATOR__

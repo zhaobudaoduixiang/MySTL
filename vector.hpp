@@ -217,7 +217,7 @@ public:     // 【增】
 public:     // 【删】
     // 弹出末端元素
     Type pop_back() {
-        if (_finish <= _start) {        // 数组为空情况
+        if (_finish <= _start) {        // 空情况
             cerr << "warning: " << "Vector(at " << this << ") is empty!" << endl;
             return Type();
         }
@@ -229,7 +229,7 @@ public:     // 【删】
     }
     // 将指针区域[first, last)元素全部删除
     void erase(iterator first, iterator last) {
-        if (_finish <= _start) {                        // 数组为空情况
+        if (_finish <= _start) {                        // 空情况
             cerr << "warning: " << "Vector(at " << this << ") is empty!" << endl;
             return;
         }

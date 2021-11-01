@@ -7,7 +7,7 @@
 #include <initializer_list>
 #include "alloc.hpp"    // ...
 #include "traits.hpp"   // ...
-#include "utils.hpp"    // mystl::max()
+#include "utils.hpp"    // ...
 using namespace std;
 
 
@@ -15,7 +15,7 @@ using namespace std;
 template < class Type, size_t buf_size >
 struct __DequeIterator {
     // 内部类型定义
-    typedef RandomIteratorTag       iterator_category;
+    typedef RandomIteratorTag       iterator_category;  // 支持随机访问的迭代器
     typedef Type                    value_type;
     typedef Type*                   pointer;
     typedef Type&                   reference;
@@ -110,10 +110,10 @@ public:     // 【类型定义】
     typedef Allocator<Type*, Alloc>             map_allocator;      // 【用于分配中控器的空间】 
 
 private:    // 【成员变量】
-    iterator    _start;         // ...
-    iterator    _finish;        // ...
+    iterator    _start;         // 第一个
+    iterator    _finish;        // 最后一个的后一个
     Type**      _map_start;     // 中控器起始
-    Type**      _map_finish;    // ...
+    size_t      _map_size;
 
 private:    // 【...】
     // 分配中控器的空间【全0初始化】
@@ -123,28 +123,60 @@ private:    // 【...】
     // 分配一个缓冲区的空间
     Type* _allocate_buffer(size_t bufsz) { return buffer_allocator::allocate(bufsz); }
     // 释放bufp所指缓冲区的空间，并将bufp指向0
-    void _deallocate_buffer(Type** bufp) { buffer_allocator::deallocate(bufp); *bufp = nullptr; }
+    void _deallocate_buffer(Type** bufp) { buffer_allocator::deallocate(*bufp); *bufp = nullptr; }
     // 重新分配中控器的空间【全0】，并调整居中
-    void _readjust_map(size_t add_buffers, bool add_at_front) {}
+    void _readjust_map(size_t add_buffers, bool add_front) {
+        size_t old_buffers = _finish.buf-_start.buf+1;
+        size_t need_buffers = old_buffers + add_buffers;
+        Type** new_start_buf;
+        // 中控器空间充足，直接居中即可
+        if (_map_size >= 2*need_buffers) {
+            new_start_buf = _map_start + (_map_size-need_buffers)/2;    // 居中时预留了add_buffers，而并未真正添加
+            if (add_front) new_start_buf += add_buffers;                // 因此前端添加时要注意“恢复”start到未预留状态
+            size_t buf_offset = new_start_buf - _start.buf;                         // 缓冲区偏移量
+            memmove(new_start_buf, _start.buf, old_buffers*sizeof(Type*));
+            if (buf_offset < 0)  // 【置0！保持中控器上未分配的缓冲区必定指向nullptr！】
+                memset(new_start_buf+old_buffers, 0, (-buf_offset)*sizeof(Type*));  // 后端添加，前移
+            else
+                memset(_start.buf, 0, buf_offset*sizeof(Type*));                    // 前端添加，后移
+            _start.buf = new_start_buf;
+            _finish.buf = new_start_buf + old_buffers - 1;
+        }
+        // 需要分配更大的中控器【2倍大】
+        else {
+            _map_size += (add_buffers>_map_size ? add_buffers : _map_size);
+            Type** new_map_start = _allocate_map(_map_size);                // 分配新中控器
+            new_start_buf = new_map_start + (_map_size-need_buffers)/2;
+            if (add_front) new_start_buf += add_buffers;
+            memcpy(new_start_buf, _start.buf, old_buffers*sizeof(Type*));   // 拷贝
+            _deallocate_map(_map_start);                                    // 释放原中控器
+            _map_start = new_map_start;
+            _start.buf = new_start_buf;
+            _finish.buf = new_start_buf + old_buffers - 1;
+        }
+    }
 
 public:     // 【构造/析构函数】
     Deque() {
-        _map_start = _allocate_map(default_map_size);
-        _map_finish = _map_start + default_map_size;
-        _start.buf = _map_start + default_map_size/2;
-        _start.cur = *(_start.buf);
+        _map_size = default_map_size;
+        _map_start = _allocate_map(_map_size);
+        _start.buf = _map_start + _map_size/2;
+        *(_start.buf) = _allocate_buffer(buffer_size);  // 至少留一个缓冲区
+        _start.cur = _start.buf_start();
         _finish = _start;
     }
     Deque(initializer_list<Type> init_list) {
         // 分配中控器空间
-        size_t nbufs = init_list.size()/buffer_size+1;
-        _map_start = _allocate_map(nbufs + 2);  // 前后各留一个缓冲区
-        _map_finish = _map_start + nbufs + 2;
+        size_t nbufs = init_list.size()/buffer_size+1;  // 所需缓冲区数，恰好整除时会+1
+        _map_size = nbufs + default_map_size;
+        _map_start = _allocate_map(_map_size);          // 前后各留“默认缓冲区数的一半”
         // 分配所需缓冲区的空间
-        for (Type** bufp=_map_start+1; bufp<_map_start+1+nbufs; ++bufp)
+        Type** first_buffer = _map_start + default_map_size/2;
+        for (Type** bufp=first_buffer; bufp<first_buffer+nbufs; ++bufp)
             *bufp = _allocate_buffer(buffer_size);
         // 填充
-        _start.buf=_map_start+1; _start.cur=*(_start.buf);
+        _start.buf = first_buffer;
+        _start.cur = _start.buf_start();
         _finish = _start;
         for (const auto& item : init_list) 
             { new (_finish.cur) Type(item);  ++_finish; }
@@ -175,29 +207,88 @@ public:     // 【改、查】
     }
 
 public:     // 【增】
+    // 后端添加
     void push_back(const Type& item) {
-        if (_finish.cur == _finish.buf_finish()) {  // 到达缓冲区尾，翻页
-            if (_finish.buf+1 == _map_finish) {
-                ;
-            }
-            else if (++_finish.buf) 
-                *(_finish.buf) = _allocate_buffer(buffer_size);
-            _finish.cur = *(_finish.buf);
+        if (_finish.cur != _finish.buf_finish()-1) {    // _finish的缓冲区即使添加完后还有一个或以上空间
+            new (_finish.cur++) Type(item);
         }
-        new (_finish.cur++) Type(item);
+        else {                                          // _finish已在缓冲区最后一个，添加完后需要转到下一个缓冲区
+            new (_finish.cur) Type(item);
+            if (_finish.buf+1 == _map_start+_map_size)              // 中控器尾部空间不足，重整
+                _readjust_map(1ULL, false);
+            if (*(_finish.buf+1) == nullptr)                        // 下一个缓冲区空间未分配
+                *(_finish.buf+1) = _allocate_buffer(buffer_size);
+            ++_finish.buf;                                          // 转到下一个缓冲区（头）
+            _finish.cur = _finish.buf_start();
+        }
     }
-    void push_front(const Type& item) {}
+    // 前端添加
+    void push_front(const Type& item) {
+        if (_start.cur != _start.buf_start()) {         // _start的缓冲区未到头
+            new (--_start.cur) Type(item);
+        }
+        else {                                          // _start的缓冲区到头了，要翻页再添加
+            if (_start.buf == _map_start)                           // 中控器前端空间不足，重整
+                _readjust_map(1ULL, true);
+            if (*(_start.buf-1) == nullptr)                         // 前一个缓冲区未分配
+                *(_start.buf-1) = _allocate_buffer(buffer_size);
+            --_start.buf;                                           // 转到前一个缓冲区
+            _start.cur = _start.buf_finish()-1;
+            new (_start.cur) Type(item);                            // 别忘记添加
+        }
+    }
+    void insert(size_t index, const Type& item);
 
 public:     // 【删】
-    Type pop_back() {}
-    Type pop_front() {}
+    Type pop_back() {
+        if (empty()) { // 空情况
+            cout << "warning: Deque(at " << this << ") is empty!" << endl; 
+            return Type();
+        }
+        if (_finish.cur != _finish.buf_start()) {   // _finish缓冲区还有一个或以上空间
+            --_finish.cur;
+            Type tmp = *_finish;
+            (_finish.cur)->~Type();
+            return tmp;
+        }
+        else {                                      // _finish已在缓冲区头，即缓冲区为空，需要转到前一个缓冲区
+            if (*(_finish.buf+1) && _finish.buf+1<_map_start+_map_size)
+                _deallocate_buffer(_finish.buf+1);  // 【延迟释放缓冲区：释放跳转前的下一个缓冲区】
+            --_finish.buf;
+            _finish.cur = _finish.buf_finish()-1;   // 这两行即无判断的--_finish
+            Type tmp = *_finish;
+            (_finish.cur)->~Type();
+            return tmp;
+        }
+    }
+    Type pop_front() {
+        if (empty()) { // 空情况
+            cout << "warning: Deque(at " << this << ") is empty!" << endl; 
+            return Type();
+        }
+        if (_start.cur != _start.buf_finish()-1) {
+            Type tmp = *_start;
+            (_start.cur++)->~Type();
+            return tmp;
+        }
+        else {
+            if (*(_start.buf-1) && _start.buf>=_map_start)
+                _deallocate_buffer(_start.buf-1);
+            Type tmp = *_start;
+            (_start.cur)->~Type();
+            ++_start.buf;
+            _start.cur = _start.buf_start();
+            return tmp;
+        }
+    }
+    void erase(iterator pos);
     void clear() {
-        mystl::destroy(_start, _finish);                        // 依次析构
-        for (Type** bufp=_start.buf; *bufp; ++bufp)             // 释放各缓冲区空间
-            _deallocate_buffer(*bufp);
-        _start.buf = _map_start + (_map_finish-_map_start)/2;   // _start和_finish居中
-        _start.cur = *(_start.buf);
-        _finish = _start;
+        mystl::destroy(_start, _finish);                // 依次析构
+        for (Type** bufp=_start.buf+1; *bufp; ++bufp)   // 释放除_start.buf外的各缓冲区
+            _deallocate_buffer(bufp);                   // （至少留一个缓冲区）
+        _start.buf = _map_start + _map_size/2;          // 居中
+        _start.cur = _start.buf_start();
+        _finish = _start;                               // （中控器相关的不需改变）
     }
 };
 
