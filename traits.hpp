@@ -169,4 +169,5 @@ template<> struct TypeTraits<long double> {
     typedef TpTrue is_POD_type;
 };
 
+
 #endif // __TRAITS__

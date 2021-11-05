@@ -155,13 +155,13 @@ public:     // 【构造、析构函数】
 
     // 指定初始容量大小，而不进行对象初始化，外界看来size()=0
     // 若capacity=0则延迟构造(_start, ... = nullptr)
-    static Vector<Type, Alloc> static_construct(size_type init_capacity) {
+    static Vector<Type, Alloc> static_construct(size_type init_size) {
         Vector<Type, Alloc> tmp;
-        if (init_capacity != 0) {
+        if (init_size != 0) {
             // 将初始空间全部置0，这样即使越界访问，也能尽量避免free(未分配的空间)产生的异常
-            tmp._start = data_allocator::clallocate(init_capacity);
+            tmp._start = data_allocator::clallocate(init_size);
             tmp._finish = tmp._start;
-            tmp._end_of_storage = tmp._start + init_capacity;
+            tmp._end_of_storage = tmp._start + init_size;
         }
         return tmp;
     }
@@ -218,14 +218,16 @@ public:     // 【增】
 public:     // 【删】
     // 弹出末端元素
     Type pop_back() {
-        if (_finish <= _start) {        // 空情况
+        if (_finish <= _start) {    // 空情况
             cerr << "warning: " << "Vector(at " << this << ") is empty!" << endl;
             return Type();
         }
-        Type tmp(*(_finish-1));         // 暂存back()用于返回
-        (--_finish)->~Type();           // 对back()析构
-        if (size() < capacity()/4  &&  capacity()/2 > default_capacity)
-            _resize(capacity()/2);      // 【容量少于1/4即冗余，自动缩容为1/2；注意防止操作时间复杂度振荡】
+        --_finish;                  // _finish先往前走一格，
+        Type tmp = *_finish;        // 即_finish暂时充当“即将被弹出元素的指针”
+        _finish->~Type();
+        size_type cap = capacity();
+        if (size() < cap/4  &&  cap/2 > default_capacity)
+            _resize(cap/2);         // 【容量少于1/4即冗余，自动缩容为1/2；注意防止操作时间复杂度振荡】
         return tmp;
     }
     // 将指针区域[first, last)元素全部删除
@@ -243,8 +245,10 @@ public:     // 【删】
         const size_type n = size_type(last - first);
         memmove(first, last, sizeof(Type)*n);       // 从前向后，将last开始后边剩余元素依次前移n格
         _finish -= n;
-        while (size() < capacity()/4  &&  capacity()/2 > default_capacity)
-            _resize(capacity()/2);                  // 当n > capacity()/8时，会缩容两次或以上
+        size_type cap = capacity();
+        while (size() < cap/4  &&  cap/2 > default_capacity) 
+            cap /= 2;
+        _resize(cap/2);                             // 当n > capacity()/8时，会缩容两次或以上
     }
     // 将position指针处的元素删除
     void erase(iterator position) { 

@@ -64,12 +64,12 @@ private:    // 【扩/缩容】
 
 public:     // 【构造/析构函数】
     // 指定初始总容量
-    PriorityQueue(size_type init_capa = default_capacity):
+    PriorityQueue(size_type init_size = default_capacity):
         _start(nullptr), _finish(nullptr), _end_of_storage(nullptr) {
-        if (init_capa > 0) {
-            _start = data_allocator::allocate(init_capa);
+        if (init_size > 0) {
+            _start = data_allocator::allocate(init_size);
             _finish = _start;
-            _end_of_storage = _start + init_capa;
+            _end_of_storage = _start + init_size;
         }
     }
     // 对字面量数组heapify

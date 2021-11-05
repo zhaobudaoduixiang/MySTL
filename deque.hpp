@@ -5,6 +5,7 @@
 #ifndef __DEQUE__
 #define __DEQUE__
 #include <initializer_list>
+#include <iostream>
 #include "alloc.hpp"    // ...
 #include "traits.hpp"   // ...
 using namespace std;
@@ -13,7 +14,7 @@ using namespace std;
 // 双端队列迭代器【立大功】
 template < class Type, size_t buf_size >
 struct __DequeIterator {
-    // 内部类型定义
+    // 类型定义
     typedef RandomIteratorTag       iterator_category;  // 支持随机访问的迭代器
     typedef Type                    value_type;
     typedef Type*                   pointer;
@@ -193,9 +194,11 @@ public:     // 【Basic Accessor】
 
 public:     // 【改、查】
     Type& front() { return *(_start.cur); }
-    Type& back()  { iterator tmp=_finish; --tmp; return *(tmp.cur); }
     const Type& front() const { return *_start; }
-    const Type& back()  const { iterator tmp=_finish; --tmp; return *tmp; }
+    Type& back()  
+        { iterator tmp=_finish; --tmp; return *(tmp.cur); }
+    const Type& back() const 
+        { iterator tmp=_finish; --tmp; return *tmp; }
     Type& operator[](size_type i) { return _start[i]; }
     const Type& operator[](size_type i) const { return _start[i]; }
     iterator find(const Type& value) {
@@ -312,6 +315,7 @@ public:     // 【删】
     //     _finish = _start;
     // }
 };
+
 // cout << deq;
 template <class Type>
 ostream& operator<<(ostream& out, const Deque<Type>& deq) {

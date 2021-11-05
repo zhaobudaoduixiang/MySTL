@@ -9,6 +9,7 @@
 #define __QUEUE__
 #include "deque.hpp"
 #include "slist.hpp"
+#include "static_deque.hpp"
 using namespace std;
 
 
@@ -23,6 +24,30 @@ private:
     Seq _self;
 public:
     Queue(): _self(Seq()) {}
+public:
+    size_type size()    const { return _self.size(); }
+    bool empty()        const { return _self.empty(); }
+    const Type& front() const { return _self.front(); }
+    const Type& back()  const { return _self.back(); }
+    Type& front()       { return _self.front(); }
+    Type& back()        { return _self.back(); }
+    void push(const Type& item) { _self.push_back(item); }
+    Type pop() { return _self.pop_front(); }
+};
+
+
+template <class Type>
+struct Queue<Type, StaticDeque<Type>> {
+public:
+    typedef Type    value_type;
+    typedef Type*   pointer;
+    typedef Type&   reference;
+    typedef size_t  size_type;
+private:
+    StaticDeque<Type> _self;
+public:
+    Queue(): _self(StaticDeque<Type>()) {}
+    Queue(size_type init_size): _self(StaticDeque<Type>(init_size)) {}
 public:
     size_type size()    const { return _self.size(); }
     bool empty()        const { return _self.empty(); }
