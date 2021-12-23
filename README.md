@@ -3,7 +3,7 @@
 |---                                                                                            |---|
 |[alloc.hpp](https://github.com/zhaobudaoduixiang/MySTL/blob/main/alloc.hpp)                    |内存分配器以及construct(), destroy()|
 |[deque.hpp](https://github.com/zhaobudaoduixiang/MySTL/blob/main/deque.hpp)                    |双端队列【STL式样】|
-|[hash_map.hpp](https://github.com/zhaobudaoduixiang/MySTL/blob/main/hash_map.hpp)              |哈希映射，即“字典”【类似python的dict】|
+|[hash_map.hpp](https://github.com/zhaobudaoduixiang/MySTL/blob/main/hash_map.hpp)              |哈希映射【类似python的dict】|
 |[priority_queue.hpp](https://github.com/zhaobudaoduixiang/MySTL/blob/main/priority_queue.hpp)  |优先队列|
 |[queue.hpp](https://github.com/zhaobudaoduixiang/MySTL/blob/main/queue.hpp)                    |队列|
 |[rb_tree.hpp](https://github.com/zhaobudaoduixiang/MySTL/blob/main/rb_tree.hpp)                |红黑树|
