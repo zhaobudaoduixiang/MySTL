@@ -28,8 +28,8 @@ namespace mystl {
     template <class Type>
     void insertion_sort(Type* left, Type* right) {
         for (Type* cur=left; cur<=right; ++cur) {
-            Type tmp=*cur, *prev=cur-1;	        // [left, cur)已是有序的
-            while (prev>=left && *prev>tmp)	    // 从后往前，将大于tmp的各数逐步后移
+            Type tmp=*cur, *prev=cur-1;         // [left, cur)已是有序的
+            while (prev>=left && *prev>tmp)     // 从后往前，将大于tmp的各数逐步后移
                 { *(prev+1)=*prev; --prev; }
             *(prev+1) = tmp;
         }
@@ -50,9 +50,9 @@ namespace mystl {
         if (*left < *mid) {							
             if (*mid < *right) return mid;          // *left < *mid < *right                            ==>  left, mid, right  ==>  mid
             else if (*left < *right) return right;  // *left < *mid, *mid >= *right, *left < *right     ==>  left, right, mid  ==>  right
-            else return left;                       // *left < *mid, *mid >= *right, *left >= *right    ==>	 right, left, mid  ==>  left
+            else return left;                       // *left < *mid, *mid >= *right, *left >= *right    ==>  right, left, mid  ==>  left
         }
-        else if (*mid > *right) return mid;	        // *left >= *mid > *right                           ==>  right, mid, left  ==>  mid
+        else if (*mid > *right) return mid;         // *left >= *mid > *right                           ==>  right, mid, left  ==>  mid
         else if (*left < *right) return left;       // *left >= *mid, *mid <= *right, *left < *right    ==>  mid, left, right  ==>  left
         else return right;                          // *left >= *mid, *mid <= *right, *left <= *right   ==>  mid, right, left  ==>  right
     }
@@ -61,13 +61,13 @@ namespace mystl {
     template <class Type>
     void quick_sort(Type* left, Type* right) {
         if (right - left < 17)                          // 区间长度<=16，调用插入排序
-            return insertion_sort(left, right);	        // 递归到底：if (left >= right) return;
+            return insertion_sort(left, right);         // 递归到底：if (left >= right) return;
         // "begin partition"
-        iter_swap(left, __median(left, right));	        // *left即pivot
+        iter_swap(left, __median(left, right));         // *left即pivot
         Type *l=left+1, *r=right;
         while (1) {
-            while (*l < *left  &&  l <= r) ++l;	        // l<=r和l>r，确保l和r最后停止时错开（不重叠）——
-            while (*r > *left  &&  l <= r) --r;	        // r停在“最后一个比pivot小的数”，而l停在“第一个比pivot大的数”
+            while (*l < *left  &&  l <= r) ++l;         // l<=r和l>r，确保l和r最后停止时错开（不重叠）——
+            while (*r > *left  &&  l <= r) --r;         // r停在“最后一个比pivot小的数”，而l停在“第一个比pivot大的数”
             if (l > r) break;
             iter_swap(l++, r--);
         }
@@ -146,6 +146,7 @@ namespace mystl {
 
 // """堆排序"""
 namespace mystl {
+    // 将heap_start[idx]下沉，维护heap_start开始的最大堆
     template <class Type>
     void __shift_down(Type* heap_start, size_t heap_size, size_t idx) {
         Type tmp = heap_start[idx];
@@ -165,6 +166,7 @@ namespace mystl {
         heap_start[idx] = tmp;
     }
 
+    // 堆排序：对[left, right]区间进行
     template <class Type>
     void heap_sort(Type* left, Type* right) {
         // heapify成最大堆
@@ -180,9 +182,9 @@ namespace mystl {
 };
 
 
-// """排序函数及其泛化"""
+// """sort函数及其泛化"""
 namespace mystl {
-    // sort函数
+    // sort函数：对[first, last)进行
     template <class BidirectIterator>
     void sort(BidirectIterator first, BidirectIterator last);
 
@@ -197,8 +199,12 @@ namespace mystl {
     void quick_sort(BidirectIterator left, BidirectIterator right, ItemCompare comp);
 
     // 泛化的堆排序：对[left, right]区间进行
+    template <class BidirectIterator, class ItemCompare>
+    void __shift_down(BidirectIterator heap_start, size_t heap_size, size_t idx, ItemCompare comp);
+    template <class BidirectIterator, class ItemCompare>
+    void heap_sort(BidirectIterator left, BidirectIterator right, ItemCompare comp);
 
-    // 泛化的sort函数
+    // 泛化的sort函数：对[first, last)进行
     template <class BidirectIterator, class ItemCompare>
     void sort(BidirectIterator first, BidirectIterator last, ItemCompare comp);
 };

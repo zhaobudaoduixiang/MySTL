@@ -170,10 +170,14 @@ public:     // 【Basic Accessor】类定义中不超一行自动内联
     size_type size()        const { return size_type(_finish - _start); }           // 已有的元素个数
     size_type capacity()    const { return size_type(_end_of_storage - _start); }   // 总共可容纳的元素个数
     bool empty()            const { return _start == _finish; }                     // 是否为空
-    iterator begin()    const { return _start; }    // 更标准的定义应该是const_iterator begin() const {...}
-    iterator end()      const { return _finish; }   // 且应该重载多一个iterator begin() {...}
-    iterator rbegin()   const { return _finish-1; }
-    iterator rend()     const { return _start-1; }
+    iterator begin()    { return _start; }
+    iterator end()      { return _finish; }
+    iterator rbegin()   { return _finish-1; }
+    iterator rend()     { return _start-1; }
+    const iterator begin()  const { return _start; }
+    const iterator end()    const { return _finish; }
+    const iterator rbegin() const { return _finish-1; }
+    const iterator rend()   const { return _start-1; }
 
 public:     // 【改、查】
     Type& front() { return *_start; }
@@ -182,7 +186,6 @@ public:     // 【改、查】
     const Type& front() const { return *_start; }
     const Type& back()  const { return *(_finish-1); }
     const Type& operator[](size_type i) const { return *(_start+i); }
-    // 遍历查找与item相等的元素，返回第一个相等元素的指针
     iterator find(const Type& item) {
         for (Type* ptr=_start; ptr!=_finish; ++ptr)
             if (*ptr == item) return ptr;
@@ -236,19 +239,19 @@ public:     // 【删】
             cerr << "warning: " << "Vector(at " << this << ") is empty!" << endl;
             return;
         }
-        if (last < first  ||  last > _finish  ||        // first/last越界
+        if (last < first  ||  last > _finish  ||        // first或last越界
             first < _start  ||  first >= _finish) {
             cerr << "[first, last) is out of range!" << endl;
             return;
         }
-        mystl::destroy(first, last);                // 对[first, last)的对象析构
+        mystl::destroy(first, last);                    // 对[first, last)的对象析构
         const size_type n = size_type(last - first);
-        memmove(first, last, sizeof(Type)*n);       // 从前向后，将last开始后边剩余元素依次前移n格
+        memmove(first, last, sizeof(Type)*n);           // 从前向后，将last开始后边剩余元素依次前移n格
         _finish -= n;
         size_type cap = capacity();
         while (size() < cap/4  &&  cap/2 > default_capacity) 
             cap /= 2;
-        _resize(cap/2);                             // 当n > capacity()/8时，会缩容两次或以上
+        _resize(cap/2);                                 // 当n > capacity()/8时，会缩容两次或以上
     }
     // 将position指针处的元素删除
     void erase(iterator position) { 
