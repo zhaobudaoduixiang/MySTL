@@ -7,8 +7,8 @@
 #define __STATIC_DEQUE__
 #include <initializer_list>
 #include <iostream>
-#include "alloc.hpp"    // ...
-#include "traits.hpp"   // ...
+#include "alloc.hpp"
+#include "traits.hpp"
 using namespace std;
 
 
@@ -84,7 +84,7 @@ struct __StaticDequeIterator {
 
 
 // 静态双端队列
-template < class Type, class Alloc = FirstAlloc>
+template < class Type, class Alloc = FirstAlloc >
 class StaticDeque {
 
 public:     // 【类型定义】
@@ -106,14 +106,14 @@ private:    // 【成员变量】
 
 private:    // 【扩/缩容】
     void _resize(size_type n) {
-        Type* new_left = data_allocator::clallocate(n);
-        if (_finish <= _start) {
+        Type* new_left = data_allocator::clallocate(n);             // 全0再分配
+        if (_finish <= _start) {        // _finish<=_start，表明满了/_finish翻过页，分两部分拷贝
             Type* new_cur = new_left;
-            memcpy(new_cur, _start, (_right-_start)*sizeof(Type));
+            memcpy(new_cur, _start, (_right-_start)*sizeof(Type));  // 拷贝[_start, _right)
             new_cur += (_right-_start);
-            memcpy(new_cur, _left, (_finish-_left)*sizeof(Type));
+            memcpy(new_cur, _left, (_finish-_left)*sizeof(Type));   // 拷贝[_left, _finish)
         }
-        else {
+        else {                          // _finish>_start，未满且无翻页，直接拷贝[_start_finish)即可
             memcpy(new_left, _start, _size*sizeof(Type));
         }
         data_allocator::deallocate(_left);
@@ -125,7 +125,7 @@ private:    // 【扩/缩容】
 
 public:     // 【构造函数】
     StaticDeque(size_type init_size = default_capacity) {
-        _left   = data_allocator::clallocate(init_size);
+        _left   = data_allocator::clallocate(init_size);    // 全0初始化
         _right  = _left + init_size;
         _start  = _left + init_size/2;
         _finish = _start;
@@ -133,9 +133,9 @@ public:     // 【构造函数】
     }
     StaticDeque(initializer_list<Type> init_list) {
         _size   = init_list.size();
-        _left   = data_allocator::clallocate(_size*3);
+        _left   = data_allocator::clallocate(_size*3);      // 全0初始化，3倍大小
         _right  = _left + _size*3;
-        _start  = _left + _size;
+        _start  = _left + _size;                            // 居中
         _finish = _start;
         for (const auto& item : init_list)
             new (_finish++) Type(item);
@@ -171,14 +171,14 @@ public:     // 【改、查】
 
 public:     // 【增】
     void push_back(const Type& item) {
-        if (_size == capacity())    // 此时_start == _finish 
+        if (_size+1 == capacity())  // 此时|_finish - _start| = 1，不能完全满，否则end()==begin()
             _resize(capacity()*2+1);
         new (_finish) Type(item);
         if (++_finish==_right) _finish=_left;
         ++_size;
     }
     void push_front(const Type& item) {
-        if (_size == capacity())    // 此时_start == _finish
+        if (_size+1 == capacity())  // 此时|_finish - _start| = 1，不能完全满，否则end()==begin()
             _resize(capacity()*2+1);
         if (_start--==_left) _start=_right-1;
         new (_start) Type(item);

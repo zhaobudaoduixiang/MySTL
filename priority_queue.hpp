@@ -81,8 +81,8 @@ public:     // 【构造/析构函数】
         for (const auto& item : init_list)
             new (_finish++) Type(item);
         // heapify【从最后一个节点的父节点开始往前，就都可以看作一个子堆了，依次shift down】
-        for (size_type index=((_finish-1-_start)-1)/2 ; index>=0; --index)
-            _shift_down(index);
+        for (ptrdiff_t idx=((_finish-1-_start)-1)/2 ; idx>=0; --idx)
+            _shift_down(idx);
     }
     ~PriorityQueue() {
         mystl::destroy(_start, _finish);
@@ -107,18 +107,18 @@ public:     // 【增】
         if (_finish == _end_of_storage)
             _resize(capacity() * 2 + 1);
         new (_finish++) Type(item);
-        _shift_up(_finish-1 - _start);
+        _shift_up((_finish-1)-_start);
     }
-    private: void _shift_up(size_type index) {
+    private: void _shift_up(size_type idx) {
         char tmp[sizeof(Type)];
-        memcpy(tmp, _start+index, sizeof(Type));    // *tmp用于暂存刚入队那个
-        size_type parent_idx = (index-1) / 2;
-        while ( index > 0  &&  _superior(*(Type*)tmp, _start[parent_idx]) ) {     // *tmp优先级高于其父节点，还需上移
-            memcpy(_start+index, _start+parent_idx, sizeof(Type));      // 即_start[index] = _start[parent_idx]
-            index = parent_idx;                                         // 将父节点下移，等价于*tmp交换上移
-            parent_idx = (index-1) / 2;
+        memcpy(tmp, _start+idx, sizeof(Type));    // *tmp用于暂存刚入队那个
+        size_type parent_idx = (idx-1) / 2;
+        while ( idx > 0  &&  _superior(*(Type*)tmp, _start[parent_idx]) ) {     // *tmp优先级高于其父节点，还需上移
+            memcpy(_start+idx, _start+parent_idx, sizeof(Type));      // 即_start[idx] = _start[parent_idx]
+            idx = parent_idx;                                         // 将父节点下移，等价于*tmp交换上移
+            parent_idx = (idx-1) / 2;
         }                                           // 循环退出后index==0或*tmp优先级不高于父亲节点了
-        memcpy(_start+index, tmp, sizeof(Type));    // 此时index正是*tmp应该呆的地方（参考插入排序逻辑）
+        memcpy(_start+idx, tmp, sizeof(Type));      // 此时idx正是*tmp应该呆的地方（参考插入排序逻辑）
     }
 
 public:     // 【删】
@@ -136,24 +136,24 @@ public:     // 【删】
         _shift_down(0);
         return tmp;
     }
-    private: void _shift_down(size_type index) {
+    private: void _shift_down(size_type idx) {
         char tmp[sizeof(Type)];
-        memcpy(tmp, _start+index, sizeof(Type));    // *tmp用于暂存刚入队那个
+        memcpy(tmp, _start+idx, sizeof(Type));    // *tmp用于暂存刚入队那个
         size_type finish_idx = _finish - _start;
-        size_type child_idx = index * 2 + 1;
+        size_type child_idx = idx * 2 + 1;
         while (child_idx < finish_idx) {
             // 选出左右孩子中优先级较高的一个（的索引）
             if ( child_idx+1 < finish_idx  &&   
                 _superior(_start[child_idx+1], _start[child_idx]) ) ++child_idx;
             // 优先级较高的孩子比*tmp更优先？
             if ( _superior(_start[child_idx], *(Type*)tmp) ) {
-                memcpy(_start+index, _start+child_idx, sizeof(Type));   // 即_start[index] = _start[child_idx]
-                index = child_idx;                                      // 孩子节点上移，等价于*tmp下移
-                child_idx = index * 2 + 1;
+                memcpy(_start+idx, _start+child_idx, sizeof(Type));   // 即_start[idx] = _start[child_idx]
+                idx = child_idx;                                      // 孩子节点上移，等价于*tmp下移
+                child_idx = idx * 2 + 1;
             }
             else { break; }
-        }                                           // 循环退出后*tmp没有孩子(child_idx>=finish_idx)
-        memcpy(_start+index, tmp, sizeof(Type));    // 或*tmp优先级不低于孩子节点，index就是*tmp应该呆的地方
+        }                                           // 循环退出后*tmp没有孩子(child_idx>=finish_idx)，
+        memcpy(_start+idx, tmp, sizeof(Type));      // 或*tmp优先级不低于孩子节点，idx就是*tmp应该呆的地方
     }
 };
 

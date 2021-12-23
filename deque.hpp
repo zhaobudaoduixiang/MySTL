@@ -6,8 +6,8 @@
 #define __DEQUE__
 #include <initializer_list>
 #include <iostream>
-#include "alloc.hpp"    // ...
-#include "traits.hpp"   // ...
+#include "alloc.hpp"
+#include "traits.hpp"
 using namespace std;
 
 
@@ -119,11 +119,11 @@ private:    // 【...】
     // 分配中控器的空间【全0初始化】
     Type** _allocate_map(size_type mapsz)   { return map_allocator::clallocate(mapsz); }
     // 释放中控器的空间
-    void _deallocate_map(Type** mapp)    { map_allocator::deallocate(mapp); }
+    void _deallocate_map(Type** mapst)      { map_allocator::deallocate(mapst); }
     // 分配一个缓冲区的空间
     Type* _allocate_buffer(size_type bufsz) { return buffer_allocator::allocate(bufsz); }
     // 释放bufp所指缓冲区的空间，并将bufp指向0
-    void _deallocate_buffer(Type** bufp) { buffer_allocator::deallocate(*bufp); *bufp = nullptr; }
+    void _deallocate_buffer(Type** bufp)    { buffer_allocator::deallocate(*bufp); *bufp = nullptr; }
     // 重新分配中控器的空间【全0】，并调整居中
     void _readjust_map(size_type add_buffers, bool add_front) {
         size_type old_buffers = _finish.buf-_start.buf+1;
@@ -132,13 +132,14 @@ private:    // 【...】
         // 中控器空间充足，直接居中即可
         if (_map_size >= 2*need_buffers) {
             new_start_buf = _map_start + (_map_size-need_buffers)/2;    // 居中时预留了add_buffers，而并未真正添加
-            if (add_front) new_start_buf += add_buffers;                // 因此前端添加时要注意“恢复”start到未预留状态
+            if (add_front)                                              // 因此前端添加时要注意“恢复”start到未预留状态
+                new_start_buf += add_buffers;
             size_type buf_offset = new_start_buf - _start.buf;                      // 缓冲区偏移量
             memmove(new_start_buf, _start.buf, old_buffers*sizeof(Type*));
-            if (buf_offset < 0)  // 【置0！保持中控器上未分配的缓冲区指向nullptr！】
-                memset(new_start_buf+old_buffers, 0, (-buf_offset)*sizeof(Type*));  // 后端添加，前移
+            if (buf_offset < 0) 
+                memset(new_start_buf+old_buffers, 0, (-buf_offset)*sizeof(Type*));  // 后端添加，前移了，[new_finish_buf+1, _finish.buf]置0
             else
-                memset(_start.buf, 0, buf_offset*sizeof(Type*));                    // 前端添加，后移
+                memset(_start.buf, 0, buf_offset*sizeof(Type*));                    // 前端添加，后移了，[_start.buf, new_start_buf)置0
             _start.buf = new_start_buf;
             _finish.buf = new_start_buf + old_buffers - 1;
         }
@@ -147,7 +148,8 @@ private:    // 【...】
             _map_size += (add_buffers>_map_size ? add_buffers : _map_size);
             Type** new_map_start = _allocate_map(_map_size);                // 分配新中控器
             new_start_buf = new_map_start + (_map_size-need_buffers)/2;
-            if (add_front) new_start_buf += add_buffers;
+            if (add_front) 
+                new_start_buf += add_buffers;
             memcpy(new_start_buf, _start.buf, old_buffers*sizeof(Type*));   // 拷贝
             _deallocate_map(_map_start);                                    // 释放原中控器
             _map_start = new_map_start;
@@ -248,7 +250,7 @@ public:     // 【删】
             cout << "warning: Deque(at " << this << ") is empty!" << endl; 
             return Type();
         }
-        if (_finish.cur != _finish.buf_start()) {   // _finish缓冲区还有一个或以上空间
+        if (_finish.cur != _finish.buf_start()) {   // _finish缓冲区前端还有一个或以上空间
             --_finish.cur;
             Type tmp = *_finish;
             (_finish.cur)->~Type();
@@ -270,12 +272,12 @@ public:     // 【删】
             cout << "warning: Deque(at " << this << ") is empty!" << endl; 
             return Type();
         }
-        if (_start.cur != _start.buf_finish()-1) {
+        if (_start.cur != _start.buf_finish()-1) {  // _start缓冲区后端还有一个或以上空间
             Type tmp = *_start;
             (_start.cur++)->~Type();
             return tmp;
         }
-        else {
+        else {                                      // _start已在缓冲区尾，释放后需要转到下一个缓冲区
             if (*(_start.buf-1) && _start.buf>=_map_start)
                 _deallocate_buffer(_start.buf-1);
             Type tmp = *_start;
@@ -296,7 +298,7 @@ public:     // 【删】
         _start.cur = _start.buf_start();
         _finish = _start;                               // ...
     }
-    // 没必要搞得这么复杂，其实速度差不多...
+    // 速度稍快，但是逻辑复杂的clear()
     // void clear() {
     //     if (_start.buf == _finish.buf) 
     //         mystl::destroy(_start.cur, _finish.cur);

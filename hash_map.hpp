@@ -11,28 +11,40 @@ using namespace std;
 // ...
 template <class Key>
 struct __HashSetNode {
-    Key                 _key;
-    __HashSetNode<Key>* _right;  // 即next，继承到TreeNode后即右孩子（父类指针可无条件指向派生类对象）
+    Key                 key;
+    __HashSetNode<Key>* right;  // 即next，继承到TreeNode后即右孩子（父类指针可无条件指向派生类对象）
 };
 
 // ...
 template <class Key>
 struct __HashSetTreeNode: __HashSetNode<Key> {
-    __HashSetTreeNode<Key>* _left;
-    bool                    _color;
+    __HashSetTreeNode<Key>* left;
+    bool                    color;
 };
 
 // ...
 template <class Key, class Value>
-struct __HashMapNode: __HashSetNode<Key> { Value _value; };
+struct __HashMapNode { 
+    Key                         key;
+    Value                       value;
+    __HashMapNode<Key, Value>*  right;
+};
 
 // ...
 template <class Key, class Value>
-struct __HashMapTreeNode: __HashSetTreeNode<Key> { Value _value; };
+struct __HashMapTreeNode: __HashMapNode<Key, Value> {
+    __HashMapTreeNode<Key, Value>*  left;
+    bool                            color;
+};
 
-// ...
+// 迭代器
 template <class Key, class Value>
-struct __HashMapIterator {};
+struct __HashMapIterator {
+    typedef __HashMapNode<Key, Value> Node;
+    Node**      bucket;
+    Node*       cur;
+    void*       obj;
+};
 
 // """哈希映射[STL unordered_map<>]"""
 template <class Key, 
@@ -57,8 +69,8 @@ public:     // 【类型定义】
     typedef Allocator<TreeNode, NodeAlloc>  treenode_allocator;
 
 private:    // 【成员变量】
-    static const size_type __up_tol = 10;   // 负载因子上限
-    static const size_type __low_tol = 1;   // 负载因子下限
+    static const size_type __up_tol = 10;   // 负载因子上限，即当node/bucket > 10时，rehash(next_table_size())
+    static const size_type __low_tol = 1;   // 负载因子下限，即当node/bucket < 1时，rehash(prev_table_size())
     static constexpr size_type __table_sizes[28] = { 53, 97, 193, 389, 769, 1543, 3079, 6151, 
                                                      12289, 24593, 49157, 98317, 196613, 393241, 
                                                      786433, 1572869, 3145739, 6291469, 12582917, 
@@ -73,12 +85,17 @@ private:    // 【成员变量】
     bool*       _istree;        // ...
 
 private:    // 【rehash】
-    size_type _next_tbsize() const {
+    size_type _next_table_size() const {
         for (const size_type* cur=__table_sizes; cur<__table_sizes+28; ++cur)
             if (*cur == _table_size) return *(++cur);
         return (size_type)0;
     }
-    void _rehash(size_type tbsize) {;}
+    size_type _prev_table_size() const {
+        for (const size_type* cur=__table_sizes; cur<__table_sizes+28; ++cur)
+            if (*cur == _table_size) return *(--cur);
+        return (size_type)0;
+    }
+    void _rehash(size_type table_size) {;}
 
 public:     // 【构造/析构函数】
     HashMap(): 

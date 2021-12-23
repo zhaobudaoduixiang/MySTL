@@ -139,7 +139,7 @@ template<> struct Less<char*> {
 // [STL greater_equal<>, less_equal<>, equal<>...]
 
 
-// [STL pair<>]
+// """STL pair<>"""
 template <class T1, class T2>
 struct Pair {
     T1 first;
@@ -188,23 +188,29 @@ ostream& operator<<(ostream& out, const Pair<T1, T2>& pr_obj)
     { return out << "(" << pr_obj.first << ", " << pr_obj.second << ")"; }
 
 
-// 重名，以mystl命名空间加以区分
+// """重名，以mystl命名空间加以区分"""
 namespace mystl {
     // [STL swap()]
     template <class Type>
-    inline void swap(const Type& a, const Type& b) { Type tmp=a; a=b; b=tmp; }
+    inline void swap(Type& a, Type& b) { Type tmp=a; a=b; b=tmp; }
+
+    // [类似STL iter_swap()，不过只支持指针...]
+    template <class Type>
+    inline void iter_swap(Type* a, Type* b) { Type tmp=*a; *a=*b; *b=tmp; }
+    // template <class ForwardIterator1, class ForwardIterator2>
+    // inline void iter_swap(ForwardIterator1 a, ForwardIterator2 b) { ... }
 
     // [STL max()]
     template <class Type>
     inline const Type& max(const Type& a, const Type& b) { return b>a ? b : a; }
-    template <class Type, class Compare>
-    inline const Type& max(const Type& a, const Type& b, Compare comp) { return comp(b, a) ? b : a; }
+    template <class Type, class ItemCompare>
+    inline const Type& max(const Type& a, const Type& b, ItemCompare comp) { return comp(b, a) ? b : a; }
 
     // [STL min()]
     template <class Type>
     inline const Type& min(const Type& a, const Type& b) { return b<a ? b : a; }
-    template <class Type, class Compare>
-    inline const Type& min(const Type& a, const Type& b, Compare comp) { return comp(b, a) ? b : a; }
+    template <class Type, class ItemCompare>
+    inline const Type& min(const Type& a, const Type& b, ItemCompare comp) { return comp(b, a) ? b : a; }
 
     // []
     template <class T1, class T2>

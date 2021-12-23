@@ -7,23 +7,32 @@
 
 
 // """红黑树节点"""
-// 【只有键，用于TreeSet】
-template <class Key>
-struct __TreeSetNode {
-    Key key;
-    __TreeSetNode<Key> *left, *right;
+// 【红黑树节点基类】
+struct __TreeNodeBase {
+    __TreeNodeBase *left, *right;
     bool color;
 };
+// 【只包含键，用于TreeSet】
+template < class Key, class Alloc = SecondAlloc >
+struct __TreeSetNode: __TreeNodeBase { 
+    Key key;
+    void* operator new(size_t nbytes) { return Alloc::allocate(nbytes); }
+    void operator delete(void* ptr)   { Alloc::deallocate(ptr); }
+};
 // 【包含键-值，用于TreeMap】
-template <class Key, class Value>
-struct __TreeMapNode: __TreeSetNode<Key> { Value value; };
+template < class Key, class Value, class Alloc = SecondAlloc >
+struct __TreeMapNode: __TreeNodeBase { 
+    Key key; 
+    Value value; 
+    void* operator new(size_t nbytes) { return Alloc::allocate(nbytes); }
+    void operator delete(void* ptr)   { Alloc::deallocate(ptr); }
+};
 
 
 // """红黑树"""
-template < class NodeType, class Key, class KeyCompare, class Alloc >
+template < class NodeType, class Key, class KeyCompare >
 struct __RBTree {
     // 【类型定义】
-    typedef Allocator<NodeType, Alloc>  node_allocator;
     static const bool red   = true;
     static const bool black = false;
     
@@ -54,8 +63,6 @@ struct __RBTree {
     // 【改、查】
     static NodeType* _find(NodeType* opnode, const Key& key);
 };
-
-
 
 
 #endif // __RB_TREE__

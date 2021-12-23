@@ -3,8 +3,8 @@
  * STL当中 <stl_slist.h>/<slist> 或 新版<forward_list> 部分内容的简化版
  * 
  * SList<> 与 STL slist<>/forward_list<> 的不同之处：
- * (1)除“头端插入/删除push_front()/pop_front()”外，也支持高效的尾端插入push_back()
- * (2)类设计上没有采用复杂继承关系，因为个人认为真没必要...
+ * (1)除“头端插入/删除【push_front()/pop_front()】”外，也支持高效的尾端插入push_back()
+ * (2)节点设计上没有采用复杂继承关系，因为个人认为真没必要...
  * 当然了，假如是只要求push_front()/pop_front()的话，则有必要这样 —— 
  * 
  * struct __SListLink {__SListLink* link;};
@@ -18,7 +18,7 @@
  *  typedef __SListNode<Type>   Node;
  *  ...
  *  Link        _dummy_head;  // 虚拟头节点，只有link没有data
- *  size_type   _count;       // 而指向_Link的指针，也可无条件指向_Node，因_Node继承自_Link
+ *  size_type   _count;       // 而指向Link类的指针，也可无条件指向Node，因Node继承了Link
  * };
  * 
  * 这样可以相当优雅地将空/非空的增删操作都统一起来！
@@ -66,9 +66,13 @@ struct __SListIterator {
         { return node_p == other.node_p; }
     bool operator!=(const iterator& other) const 
         { return node_p != other.node_p; }
-    Type& operator*()   const { return node_p->data; }
+    const Type& operator*() const 
+        { return node_p->data; }
+    Type& operator*() 
+        { return node_p->data; }
+    operator Node*() const 
+        { return node_p; }
     Type* operator->()  const { return &(node_p->data); }   // 【注：是->self，不是self->】
-    operator Node*()   const { return node_p; }
 };
 
 
