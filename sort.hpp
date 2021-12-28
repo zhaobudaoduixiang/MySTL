@@ -150,8 +150,9 @@ namespace mystl {
     // 合并排序（自底向上bottom up）：对[left, right]区间进行
     template <class Type>
     void merge_sort_bu(Type* left, Type* right) {
-        Type* auxiliary = (Type*)malloc((right-left+1) * sizeof(Type));
-        for (size_t sz=1; sz<right-left+1; sz*=2)       // sz是每个待合并部分的长度【严格sz<n，若等于则可以结束了】
+        size_t n = max(right - left + 1, 0);
+        Type* auxiliary = (Type*)malloc(n*sizeof(Type));
+        for (size_t sz=1; sz<n; sz*=2)                  // sz是每个待合并部分的长度【严格sz<n，若等于则可以结束了】
             for (Type* l=left; l+sz<=right; l+=2*sz) {
                 Type* mid = l + sz - 1;                 // 左部分[l, mid]，长度为sz
                 Type* r   = min(l+(2*sz)-1, right);     // 右部分[mid+1, r]，长度可能不足sz
@@ -195,7 +196,7 @@ namespace mystl {
             __shift_down(left, heap_size, i);
         // 逐步弹出元素，将元素从后向前存储于数组尾部
         while (heap_size > 0) {
-            mystl::iter_swap(left, left+(--heap_size));
+            iter_swap(left, left+(--heap_size));
             __shift_down(left, heap_size, 0);
         }
     }
@@ -203,10 +204,10 @@ namespace mystl {
 
 
 // """sort函数及其泛化"""
-// 一般情况：快速排序
-// 递归层数>2logn：堆排序
 namespace mystl {
     // sort函数：对[first, last)进行
+    // 一般情况：快速排序
+    // 递归层数>2logn：堆排序
     template <class BidirectIterator>
     void sort(BidirectIterator first, BidirectIterator last);
 

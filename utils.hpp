@@ -6,6 +6,7 @@
 #define __UTILITIES__
 #include <iostream> // ostream
 #include <cstring>  // strcmp
+#include "traits.hpp"
 using namespace std;
 
 
@@ -198,19 +199,23 @@ namespace mystl {
     template <class Type>
     inline void iter_swap(Type* a, Type* b) { Type tmp=*a; *a=*b; *b=tmp; }
     // template <class ForwardIterator1, class ForwardIterator2>
-    // inline void iter_swap(ForwardIterator1 a, ForwardIterator2 b) { ... }
+    // inline void iter_swap(ForwardIterator1 a, ForwardIterator2 b) {
+    //     typename IteratorTraits<ForwardIterator1>::value_type tmp = *a;
+    //     *a = *b;
+    //     *b = tmp;
+    // }
 
     // [STL max()]
     template <class Type>
     inline const Type& max(const Type& a, const Type& b) { return b>a ? b : a; }
     template <class Type, class ItemCompare>
-    inline const Type& max(const Type& a, const Type& b, ItemCompare comp) { return comp(b, a) ? b : a; }
+    inline const Type& max(const Type& a, const Type& b, ItemCompare comp) { return comp(b, a)>0 ? b : a; }
 
     // [STL min()]
     template <class Type>
     inline const Type& min(const Type& a, const Type& b) { return b<a ? b : a; }
     template <class Type, class ItemCompare>
-    inline const Type& min(const Type& a, const Type& b, ItemCompare comp) { return comp(b, a) ? b : a; }
+    inline const Type& min(const Type& a, const Type& b, ItemCompare comp) { return comp(b, a)<0 ? b : a; }
 
     // []
     template <class T1, class T2>
