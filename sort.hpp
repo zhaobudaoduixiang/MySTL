@@ -37,7 +37,26 @@ namespace mystl {
 
     // 希尔排序：对[left, right]区间进行
     template <class Type>
-    void shell_sort(Type* left, Type* right);
+    void shell_sort(Type* left, Type* right) {
+    // 【采用】Knuth: 1, 4, 13, 40, 121, 364, 1093... (next(gap) = 3 * gap + 1)
+    // Hibbard: 1, 3, 7, 15... (next(gap) = 2 * gap -1)
+    // Sedgewick: 1, 5, 19, 41, 109... (next(gap) = 9*4^gap - 9*2^gap + 1  //  k = 4^gap - 3*2^gap + 1)
+        size_t gap = 1;
+        while (gap < (right-left+1)/3) gap=3*gap+1;
+        // 预处理：通过以gap为跨度进行分组，分别进行插入排序，以避免最终插入排序的长距离插入
+        // 每组：array[i, i+gap, i+2*gap...]；每组的插入排序是“交替”进行的
+        while (gap > 1) {
+            for (Type* cur=left; cur<=right; ++cur) {
+                Type tmp=*cur, *prev=cur-gap;
+                while (prev>=left && *prev>tmp)
+                    { *(prev+gap)=*prev; prev-=gap; }
+                *(prev+gap) = tmp;
+            }
+            gap /= 3;
+        }
+        // 最终插入排序：【如果上边是 while(gap>=1){...} 就可以不要这个】
+        insertion_sort(left, right);
+    }
 };
 
 
@@ -60,14 +79,14 @@ namespace mystl {
     // 快速排序：对[left, right]区间进行
     template <class Type>
     void quick_sort(Type* left, Type* right) {
-        if (right - left < 17)                          // 区间长度<=16，调用插入排序
-            return insertion_sort(left, right);         // 递归到底：if (left >= right) return;
+        if (right - left < 17)                      // 区间长度<=16，调用插入排序
+            return insertion_sort(left, right);     // 递归到底：if (left >= right) return;
         // "begin partition"
-        iter_swap(left, __median(left, right));         // *left即pivot
+        iter_swap(left, __median(left, right));     // *left即pivot
         Type *l=left+1, *r=right;
         while (1) {
-            while (*l < *left  &&  l <= r) ++l;         // l<=r和l>r，确保l和r最后停止时错开（不重叠）——
-            while (*r > *left  &&  l <= r) --r;         // r停在“最后一个比pivot小的数”，而l停在“第一个比pivot大的数”
+            while (*l < *left  &&  l <= r) ++l;     // l<=r和l>r，确保l和r最后停止时错开（不重叠）——
+            while (*r > *left  &&  l <= r) --r;     // r停在“最后一个比pivot小的数”，而l停在“第一个比pivot大的数”
             if (l > r) break;
             iter_swap(l++, r--);
         }
@@ -99,12 +118,12 @@ namespace mystl {
     template <class Type>
     void __merge(Type* left, Type* mid, Type* right, Type* aux) {
         memcpy(aux, left, (mid-left+1)*sizeof(Type));
-        Type *l=aux, *r=mid+1;                          // 左游标l在aux上
+        Type *l=aux, *r=mid+1;                          // 注意：左游标l在aux上！
         mid = aux + (mid-left);                         // mid用作左游标l的右边界
         while (l<=mid && r<=right) 
             *left++ = (*r < *l) ? *r++ : *l++;          // left用作结果游标
         if (l <= mid) 
-            memcpy(left, l, (mid-l+1)*sizeof(Type));    // 拷贝剩余部分【注：l未到mid要拷贝到left，r未到right则不用管】
+            memcpy(left, l, (mid-l+1)*sizeof(Type));    // 拷贝剩余部分【l未到mid要拷贝到left，r未到right则不用管】
         // while (l<=mid)   *left++=*l++;
         // while (r<=right) *left++=*r++;
     }
@@ -132,11 +151,12 @@ namespace mystl {
     template <class Type>
     void merge_sort_bu(Type* left, Type* right) {
         Type* auxiliary = (Type*)malloc((right-left+1) * sizeof(Type));
-        for (size_t sz=1; sz<right-left+1; sz*=2)                       // sz是每个待合并部分的长度【严格<n，若等于则可以结束了】
+        for (size_t sz=1; sz<right-left+1; sz*=2)       // sz是每个待合并部分的长度【严格sz<n，若等于则可以结束了】
             for (Type* l=left; l+sz<=right; l+=2*sz) {
-                Type* mid = l + sz - 1;                                 // 左部分[l, mid]，长度为sz
-                Type* r   = min(l+(2*sz)-1, right);	                    // 右部分[mid+1, r]，长度可能不足sz
-                if (*mid > *(mid+1)) __merge(l, mid, r, auxiliary);
+                Type* mid = l + sz - 1;                 // 左部分[l, mid]，长度为sz
+                Type* r   = min(l+(2*sz)-1, right);     // 右部分[mid+1, r]，长度可能不足sz
+                if (*mid > *(mid+1)) 
+                    __merge(l, mid, r, auxiliary);
                 // 【末尾长度不足sz的那些残余部分会在最上层，即最后得到合并】
             }
         free(auxiliary);
@@ -183,6 +203,8 @@ namespace mystl {
 
 
 // """sort函数及其泛化"""
+// 一般情况：快速排序
+// 递归层数>2logn：堆排序
 namespace mystl {
     // sort函数：对[first, last)进行
     template <class BidirectIterator>

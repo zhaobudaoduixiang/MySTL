@@ -213,7 +213,7 @@ public:     // 【增】
         for (size_type i=0; i<n; ++i)                       // 从position开始依次以value值构造n个对象
             new (position++) Type(value);
     }
-    // 在position指针处插入元素item
+    // 在position指针处插入元素item【偷懒了... 可以优化】
     void insert(iterator position, const Type& item) { 
         insert(position, 1, item); 
     }
@@ -253,7 +253,7 @@ public:     // 【删】
             cap /= 2;
         _resize(cap/2);                                 // 当n > capacity()/8时，会缩容两次或以上
     }
-    // 将position指针处的元素删除
+    // 将position指针处的元素删除【偷懒了... 可以优化】
     void erase(iterator position) { 
         erase(position, position+1); 
     }

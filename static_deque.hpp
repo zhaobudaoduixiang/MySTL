@@ -1,7 +1,7 @@
 /* static_deque.hpp
  * 【静态双端队列】允许以“均摊O(1)”的时间复杂度在两端进行增/删，支持[]随机访问
  * 一般双端队列的结构复杂，而在某些应用场景下需要的空间可提前预知，这时使用静态双端队列将更加高效
- * 虽宣称“静态”，不过也会自动扩容/缩容，规则与动态数组Vector<>一致
+ * 虽宣称“静态”，不过也会自动扩容/缩容，规则与动态数组Vector<>类似
  */
 #ifndef __STATIC_DEQUE__
 #define __STATIC_DEQUE__
@@ -83,7 +83,7 @@ struct __StaticDequeIterator {
 };
 
 
-// 静态双端队列
+// """双端队列"""
 template < class Type, class Alloc = FirstAlloc >
 class StaticDeque {
 
@@ -94,26 +94,33 @@ public:     // 【类型定义】
     typedef size_t      size_type;
     typedef ptrdiff_t   difference_type;
     typedef __StaticDequeIterator<Type> iterator;
-    typedef Allocator<Type, Alloc>      data_allocator; // 【内存分配器】
+    typedef Allocator<Type, Alloc>      data_allocator;
     static const size_type default_capacity = 31;
 
 private:    // 【成员变量】
-    Type*       _left;      // ...
-    Type*       _right;     // ...
-    Type*       _start;     // ...
-    Type*       _finish;    // ...
-    size_type   _size;      // ...
+    // [ ][ ][@][@][@][@][@][@][@][@][ ][ ][ ][ ][ ][ ]
+    // ↑     ↑                       ↑                 ↑
+    // _left _start                  _finish           _right   (_size=8)
+    // ---进行5次push_front(...)---
+    // [@][@][@][@][@][@][@][@][@][@][ ][ ][ ][@][@][@]
+    // ↑                             ↑        ↑        ↑
+    // _left                         _finish  _start   _right   (_size=13)
+    Type*       _left;
+    Type*       _right;
+    Type*       _start;
+    Type*       _finish;
+    size_type   _size;
 
 private:    // 【扩/缩容】
     void _resize(size_type n) {
         Type* new_left = data_allocator::clallocate(n);             // 全0再分配
-        if (_finish <= _start) {        // _finish<=_start，表明满了/_finish翻过页，分两部分拷贝
+        if (_finish<_start) {               // 表明_start或_finish翻过页，分两部分拷贝
             Type* new_cur = new_left;
             memcpy(new_cur, _start, (_right-_start)*sizeof(Type));  // 拷贝[_start, _right)
             new_cur += (_right-_start);
             memcpy(new_cur, _left, (_finish-_left)*sizeof(Type));   // 拷贝[_left, _finish)
         }
-        else {                          // _finish>_start，未满且无翻页，直接拷贝[_start_finish)即可
+        else {                              // _finish>=_start，即空/未满且无翻页，直接拷贝[_start, _finish)即可
             memcpy(new_left, _start, _size*sizeof(Type));
         }
         data_allocator::deallocate(_left);
@@ -127,18 +134,21 @@ public:     // 【构造函数】
     StaticDeque(size_type init_size = default_capacity) {
         _left   = data_allocator::clallocate(init_size);    // 全0初始化
         _right  = _left + init_size;
-        _start  = _left + init_size/2;
+        _start  = _left + init_size/2;                      // 居中
         _finish = _start;
         _size   = 0;
     }
-    StaticDeque(initializer_list<Type> init_list) {
-        _size   = init_list.size();
-        _left   = data_allocator::clallocate(_size*3);      // 全0初始化，3倍大小
-        _right  = _left + _size*3;
-        _start  = _left + _size;                            // 居中
-        _finish = _start;
+    StaticDeque(initializer_list<Type> init_list, 
+                size_type init_size = default_capacity) {
+        while (init_size < init_list.size())                // 注意自定义的init_size可能不足
+            init_size = init_size * 2 + 1;
+        _left   = data_allocator::clallocate(init_size);
+        _right  = _left + init_size;
+        _start  = _left;                                    // 不必居中了...
+        _finish = _left;
         for (const auto& item : init_list)
             new (_finish++) Type(item);
+        _size   = init_list.size();
     }
     StaticDeque(const StaticDeque<Type, Alloc>& other) {
         _left   = data_allocator::clallocate(other.capacity());
@@ -149,20 +159,27 @@ public:     // 【构造函数】
             new (_finish++) Type(item);
         _size   = other._size;
     }
-    // StaticDeque(StaticDeque<Type, Alloc>&& other) {}  // 同上...
+    // StaticDeque(StaticDeque<Type, Alloc>&& other) {}        // 同上...
+    // operator=(const StaticDeque<Type, Alloc>& other) {}
     ~StaticDeque() { clear(); data_allocator::deallocate(_left); }
 
 public:     // 【Basic Accessor】
     size_type size()     const { return _size; }
     size_type capacity() const { return _right - _left; }
     bool empty()         const { return _size == 0; }
-    iterator begin()     const { return iterator(_left, _right, _start); }
-    iterator end()       const { return iterator(_left, _right, _finish); }
+    iterator begin()  { return iterator(_left, _right, _start); }
+    iterator end()    { return iterator(_left, _right, _finish); }
+    iterator rbegin() { return iterator(_left, _right, _finish).operator--(); }
+    iterator rend()   { return iterator(_left, _right, _start).operator--(); }
+    const iterator begin()  const { return iterator(_left, _right, _start); }
+    const iterator end()    const { return iterator(_left, _right, _finish); }
+    const iterator rbegin() const { return iterator(_left, _right, _finish).operator--(); }
+    const iterator rend()   const { return iterator(_left, _right, _start).operator--(); }
 
 public:     // 【改、查】
     Type& front() { return *_start; }
     Type& back()  { return _finish==_left ? *(_right-1) : *(_finish-1); }
-    Type& operator[](size_type i) // 可以if(i >= _size)检查越界
+    Type& operator[](size_type i)       // 可以if(i >= _size)检查越界
         { return _start+i>=_right ? _left[_start+i-_right] : _start[i]; }
     const Type& front() const { return *_start; }
     const Type& back()  const { return _finish==_left ? *(_right-1) : *(_finish-1); }
@@ -171,20 +188,21 @@ public:     // 【改、查】
 
 public:     // 【增】
     void push_back(const Type& item) {
-        if (_size+1 == capacity())  // 此时|_finish - _start| = 1，不能完全满，否则end()==begin()
-            _resize(capacity()*2+1);
+        if (_size+1 == capacity())      // 此时|_finish - _start| = 1，不能完全满，否则end()==begin()
+            _resize(capacity()*2+1);    // 扩容为2倍+1
         new (_finish) Type(item);
         if (++_finish==_right) _finish=_left;
         ++_size;
     }
     void push_front(const Type& item) {
-        if (_size+1 == capacity())  // 此时|_finish - _start| = 1，不能完全满，否则end()==begin()
-            _resize(capacity()*2+1);
+        if (_size+1 == capacity())      // 此时|_finish - _start| = 1，不能完全满，否则end()==begin()
+            _resize(capacity()*2+1);    // 扩容为2倍+1
         if (_start--==_left) _start=_right-1;
         new (_start) Type(item);
         ++_size;
     }
-    iterator insert(iterator pos, const Type& item);
+    // insert()和erase()在这里太难搞了，效率不高(O(n)时间)且极少用到，
+    // 也可以通过外部进行若干次pop_front()/pop_back()然后push_front()/push_back()实现，这里就不实现了
 
 public:     // 【删】
     Type pop_back() {
@@ -205,8 +223,7 @@ public:     // 【删】
         if (++_start==_right-1) _start=_left;
         return tmp;
     }
-    iterator erase(iterator first, iterator last);
-    iterator erase(iterator pos);
+
     void clear() {
         if (_finish > _start) 
             mystl::destroy(_start, _finish);
@@ -217,7 +234,8 @@ public:     // 【删】
     }
 };
 
-// cout << deq;
+
+// cout << sdeq;
 template <class Type>
 ostream& operator<<(ostream& out, const StaticDeque<Type>& sdeq) {
     out << "[ ";
